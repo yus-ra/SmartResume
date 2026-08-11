@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Link, useLocation } from "react-router"
+import { Link, useLocation } from "react-router-dom"
 
 export const LogoIcon = () => (
     <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
@@ -11,8 +11,7 @@ export const LogoIcon = () => (
         <path d="M19.5 19l1 1 2-2" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
 )
-
-export default function SharedNav() {
+const Navbar = () => {
     const [scrolled, setScrolled] = useState(false)
     const [menuOpen, setMenuOpen] = useState(false)
     const location = useLocation()
@@ -43,7 +42,7 @@ export default function SharedNav() {
                 <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-[#475569]">
                     <a href="/#features" className="hover:text-[#2563EB] transition-colors">Features</a>
                     <a href="/#how" className="hover:text-[#2563EB] transition-colors">How it Works</a>
-                    <a href="#" className="hover:text-[#2563EB] transition-colors">Pricing</a>
+                    <a href="/#testimonials" className="hover:text-[#2563EB] transition-colors">Testimonials</a>
                 </nav>
 
                 <div className="hidden md:flex items-center gap-3">
@@ -86,3 +85,5 @@ export default function SharedNav() {
         </header>
     )
 }
+
+export default Navbar

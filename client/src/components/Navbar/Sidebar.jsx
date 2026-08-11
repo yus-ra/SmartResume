@@ -1,5 +1,5 @@
-import { Link, useLocation } from "react-router"
-import { LogoIcon } from "./SharedNav"
+import { Link, useLocation } from "react-router-dom";
+import { LogoIcon } from "./Navbar"
 
 const navItems = [
     { icon: "🏠", label: "Dashboard", to: "/dashboard" },
@@ -7,8 +7,7 @@ const navItems = [
     { icon: "🤖", label: "AI Analysis", to: "/analysis" },
     { icon: "🌐", label: "Portfolio", to: "/portfolio" },
 ]
-
-export default function AppSidebar() {
+const Sidebar = () => {
     const location = useLocation()
 
     return (
@@ -57,3 +56,5 @@ export default function AppSidebar() {
         </aside>
     )
 }
+
+export default Sidebar
