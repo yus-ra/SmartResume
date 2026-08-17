@@ -23,7 +23,7 @@ const Footer = () => {
                 <div className="flex flex-col md:items-end gap-4">
                     <div className="flex flex-wrap gap-6 text-sm font-medium text-[#475569]">
                         {["About", "Privacy", "Contact", "GitHub"].map(link => (
-                            <a key={link} href="#" className="hover:text-[#2563EB] transition-colors">{link}</a>
+                            <a key={link} href="https://github.com/yus-ra/SmartResume" className="hover:text-[#2563EB] transition-colors">{link}</a>
                         ))}
                     </div>
                     <div className="text-xs text-[#94A3B8]">© 2026 SmartResume · All rights reserved</div>
