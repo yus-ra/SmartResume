@@ -151,6 +151,7 @@ const Dashboard = () => {
               <Plus size={17} />
               Create Resume
             </Link>
+            <Link to="/import-resume">Import Resume</Link>
           </div>
         </header>
 

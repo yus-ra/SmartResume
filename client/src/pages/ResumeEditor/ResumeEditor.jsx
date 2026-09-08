@@ -1,8 +1,13 @@
-import { useState, useRef } from "react";
-import { Link } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Navbar/Sidebar";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+
+// ========================================
+// TEMPLATES
+// ========================================
+
 const templates = [
   {
     id: 1,
@@ -23,8 +28,77 @@ const templates = [
 
 const sections = ["Contact", "Summary", "Experience", "Education", "Skills"];
 
+// ========================================
+// DEFAULT RESUME
+// ========================================
+
+const defaultResume = {
+  contact: {
+    name: "Jordan Davis",
+    title: "Senior Software Engineer",
+    email: "jordan@email.com",
+    phone: "+1 (415) 555-0182",
+    location: "San Francisco, CA",
+    linkedin: "linkedin.com/in/jordandavis",
+  },
+
+  summary:
+    "Senior Software Engineer with 6+ years of experience building scalable web applications. Specialized in React, TypeScript, and distributed systems. Proven track record of delivering high-impact features.",
+
+  experience: [
+    {
+      id: 1,
+      role: "Senior Software Engineer",
+      company: "Stripe",
+      period: "2022 – Present",
+      bullets: [
+        "Led migration of payment infrastructure serving 2M+ daily transactions",
+        "Reduced API latency by 43% through caching and query optimization",
+        "Authored 3 internal RFCs adopted across 6 engineering teams",
+      ],
+    },
+    {
+      id: 2,
+      role: "Software Engineer",
+      company: "Airbnb",
+      period: "2019 – 2022",
+      bullets: [
+        "Built search ranking algorithm improving booking conversion by 18%",
+        "Mentored 4 junior engineers in React and TypeScript best practices",
+      ],
+    },
+  ],
+
+  education: [
+    {
+      id: 1,
+      degree: "B.S. Computer Science",
+      school: "UC Berkeley",
+      period: "2015 – 2019",
+    },
+  ],
+
+  skills: [
+    "React",
+    "TypeScript",
+    "Node.js",
+    "PostgreSQL",
+    "AWS",
+    "Docker",
+    "GraphQL",
+    "Python",
+  ],
+};
+
+// ========================================
+// COMPONENT
+// ========================================
+
 const ResumeEditor = () => {
   const resumeRef = useRef(null);
+  const navigate = useNavigate();
+
+  // TEMPLATE
 
   const [activeTemplate, setActiveTemplate] = useState(() => {
     const savedTemplate = localStorage.getItem("activeTemplate");
@@ -32,82 +106,51 @@ const ResumeEditor = () => {
     return savedTemplate ? Number(savedTemplate) : 1;
   });
 
-  const [activeSection, setActiveSection] = useState("Contact");
+  // ACTIVE SECTION
+
+  const [activeSection, setActiveSection] = useState(() => {
+    const sectionToOpen = localStorage.getItem("activeResumeSection");
+
+    return sectionToOpen || "Contact";
+  });
+
+  useEffect(() => {
+    localStorage.removeItem("activeResumeSection");
+  }, []);
+
+  // UI STATES
+
   const [saved, setSaved] = useState(false);
   const [zoom, setZoom] = useState(90);
 
+  // RESUME STATE
+
   const [resume, setResume] = useState(() => {
-    const savedResume = localStorage.getItem("resumeData");
+    try {
+      const savedResume = localStorage.getItem("resumeData");
 
-    return savedResume
-      ? JSON.parse(savedResume)
-      : {
-          contact: {
-            name: "Jordan Davis",
-            title: "Senior Software Engineer",
-            email: "jordan@email.com",
-            phone: "+1 (415) 555-0182",
-            location: "San Francisco, CA",
-            linkedin: "linkedin.com/in/jordandavis",
-          },
+      return savedResume ? JSON.parse(savedResume) : defaultResume;
+    } catch (error) {
+      console.error("Failed to load resume:", error);
 
-          summary:
-            "Senior Software Engineer with 6+ years of experience building scalable web applications. Specialized in React, TypeScript, and distributed systems. Proven track record of delivering high-impact features.",
-
-          experience: [
-            {
-              id: 1,
-              role: "Senior Software Engineer",
-              company: "Stripe",
-              period: "2022 – Present",
-              bullets: [
-                "Led migration of payment infrastructure serving 2M+ daily transactions",
-                "Reduced API latency by 43% through caching and query optimization",
-                "Authored 3 internal RFCs adopted across 6 engineering teams",
-              ],
-            },
-            {
-              id: 2,
-              role: "Software Engineer",
-              company: "Airbnb",
-              period: "2019 – 2022",
-              bullets: [
-                "Built search ranking algorithm improving booking conversion by 18%",
-                "Mentored 4 junior engineers in React and TypeScript best practices",
-              ],
-            },
-          ],
-
-          education: [
-            {
-              id: 1,
-              degree: "B.S. Computer Science",
-              school: "UC Berkeley",
-              period: "2015 – 2019",
-            },
-          ],
-
-          skills: [
-            "React",
-            "TypeScript",
-            "Node.js",
-            "PostgreSQL",
-            "AWS",
-            "Docker",
-            "GraphQL",
-            "Python",
-          ],
-        };
+      return defaultResume;
+    }
   });
+
+  // ACCENT COLOR
 
   const accent =
     templates.find((template) => template.id === activeTemplate)?.color ||
     "#2563EB";
 
+  // ========================================
+  // SAVE
+  // ========================================
+
   const handleSave = () => {
     localStorage.setItem("resumeData", JSON.stringify(resume));
 
-    localStorage.setItem("activeTemplate", activeTemplate);
+    localStorage.setItem("activeTemplate", activeTemplate.toString());
 
     setSaved(true);
 
@@ -115,66 +158,71 @@ const ResumeEditor = () => {
       setSaved(false);
     }, 2000);
   };
+
+  // ========================================
   // CONTACT
+  // ========================================
 
   const updateContact = (field, value) => {
-    setResume({
-      ...resume,
+    setResume((prev) => ({
+      ...prev,
       contact: {
-        ...resume.contact,
+        ...prev.contact,
         [field]: value,
       },
-    });
+    }));
   };
 
+  // ========================================
   // SUMMARY
+  // ========================================
 
   const updateSummary = (value) => {
-    setResume({
-      ...resume,
+    setResume((prev) => ({
+      ...prev,
       summary: value,
-    });
+    }));
   };
 
+  // ========================================
   // EXPERIENCE
+  // ========================================
 
   const updateExperience = (index, field, value) => {
-    const updatedExperience = [...resume.experience];
-
-    updatedExperience[index] = {
-      ...updatedExperience[index],
-      [field]: value,
-    };
-
-    setResume({
-      ...resume,
-      experience: updatedExperience,
-    });
+    setResume((prev) => ({
+      ...prev,
+      experience: prev.experience.map((item, i) =>
+        i === index
+          ? {
+              ...item,
+              [field]: value,
+            }
+          : item,
+      ),
+    }));
   };
 
   const updateBullet = (experienceIndex, bulletIndex, value) => {
-    const updatedExperience = [...resume.experience];
-
-    const updatedBullets = [...updatedExperience[experienceIndex].bullets];
-
-    updatedBullets[bulletIndex] = value;
-
-    updatedExperience[experienceIndex] = {
-      ...updatedExperience[experienceIndex],
-      bullets: updatedBullets,
-    };
-
-    setResume({
-      ...resume,
-      experience: updatedExperience,
-    });
+    setResume((prev) => ({
+      ...prev,
+      experience: prev.experience.map((item, i) =>
+        i === experienceIndex
+          ? {
+              ...item,
+              bullets: item.bullets.map((bullet, j) =>
+                j === bulletIndex ? value : bullet,
+              ),
+            }
+          : item,
+      ),
+    }));
   };
 
   const addExperience = () => {
-    setResume({
-      ...resume,
+    setResume((prev) => ({
+      ...prev,
       experience: [
-        ...resume.experience,
+        ...prev.experience,
         {
           id: Date.now(),
           role: "New Job Title",
@@ -183,71 +231,67 @@ const ResumeEditor = () => {
           bullets: ["Describe your achievement here"],
         },
       ],
-    });
-  };
-
-  const addBullet = (experienceIndex) => {
-    const updatedExperience = [...resume.experience];
-
-    updatedExperience[experienceIndex] = {
-      ...updatedExperience[experienceIndex],
-      bullets: [
-        ...updatedExperience[experienceIndex].bullets,
-        "New achievement",
-      ],
-    };
-
-    setResume({
-      ...resume,
-      experience: updatedExperience,
-    });
-  };
-  const removeBullet = (experienceIndex, bulletIndex) => {
-    const updatedExperience = [...resume.experience];
-
-    updatedExperience[experienceIndex] = {
-      ...updatedExperience[experienceIndex],
-      bullets: updatedExperience[experienceIndex].bullets.filter(
-        (_, index) => index !== bulletIndex,
-      ),
-    };
-
-    setResume({
-      ...resume,
-      experience: updatedExperience,
-    });
+    }));
   };
 
   const removeExperience = (index) => {
-    setResume({
-      ...resume,
-      experience: resume.experience.filter(
-        (_, experienceIndex) => experienceIndex !== index,
-      ),
-    });
+    setResume((prev) => ({
+      ...prev,
+      experience: prev.experience.filter((_, i) => i !== index),
+    }));
   };
 
+  const addBullet = (experienceIndex) => {
+    setResume((prev) => ({
+      ...prev,
+      experience: prev.experience.map((item, i) =>
+        i === experienceIndex
+          ? {
+              ...item,
+              bullets: [...item.bullets, "New achievement"],
+            }
+          : item,
+      ),
+    }));
+  };
+
+  const removeBullet = (experienceIndex, bulletIndex) => {
+    setResume((prev) => ({
+      ...prev,
+      experience: prev.experience.map((item, i) =>
+        i === experienceIndex
+          ? {
+              ...item,
+              bullets: item.bullets.filter((_, j) => j !== bulletIndex),
+            }
+          : item,
+      ),
+    }));
+  };
+
+  // ========================================
   // EDUCATION
+  // ========================================
 
   const updateEducation = (index, field, value) => {
-    const updatedEducation = [...resume.education];
-
-    updatedEducation[index] = {
-      ...updatedEducation[index],
-      [field]: value,
-    };
-
-    setResume({
-      ...resume,
-      education: updatedEducation,
-    });
+    setResume((prev) => ({
+      ...prev,
+      education: prev.education.map((item, i) =>
+        i === index
+          ? {
+              ...item,
+              [field]: value,
+            }
+          : item,
+      ),
+    }));
   };
 
   const addEducation = () => {
-    setResume({
-      ...resume,
+    setResume((prev) => ({
+      ...prev,
       education: [
-        ...resume.education,
+        ...prev.education,
         {
           id: Date.now(),
           degree: "New Degree",
@@ -255,82 +299,114 @@ const ResumeEditor = () => {
           period: "Year – Year",
         },
       ],
-    });
+    }));
   };
 
   const removeEducation = (index) => {
-    setResume({
-      ...resume,
-      education: resume.education.filter(
-        (_, educationIndex) => educationIndex !== index,
-      ),
-    });
+    setResume((prev) => ({
+      ...prev,
+      education: prev.education.filter((_, i) => i !== index),
+    }));
   };
 
+  // ========================================
   // SKILLS
+  // ========================================
 
   const addSkill = (skill) => {
-    if (!skill.trim()) return;
+    const trimmedSkill = skill.trim();
 
-    if (resume.skills.includes(skill.trim())) return;
+    if (!trimmedSkill) return;
 
-    setResume({
-      ...resume,
-      skills: [...resume.skills, skill.trim()],
-    });
+    if (resume.skills.includes(trimmedSkill)) return;
+
+    setResume((prev) => ({
+      ...prev,
+      skills: [...prev.skills, trimmedSkill],
+    }));
   };
 
   const removeSkill = (skill) => {
-    setResume({
-      ...resume,
-      skills: resume.skills.filter((item) => item !== skill),
-    });
+    setResume((prev) => ({
+      ...prev,
+      skills: prev.skills.filter((item) => item !== skill),
+    }));
   };
-  //   export to PDF
+
+  // ========================================
+  // ANALYZE
+  // ========================================
+
+  const handleAnalyze = () => {
+    localStorage.setItem("resumeData", JSON.stringify(resume));
+
+    localStorage.setItem("activeTemplate", activeTemplate.toString());
+
+    navigate("/analysis");
+  };
+
+  // ========================================
+  // EXPORT PDF
+  // ========================================
+
   const exportPDF = async () => {
     const resumeElement = resumeRef.current;
 
     if (!resumeElement) return;
 
-    const canvas = await html2canvas(resumeElement, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-    });
+    try {
+      const canvas = await html2canvas(resumeElement, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+      });
 
-    const imgData = canvas.toDataURL("image/png");
+      const imgData = canvas.toDataURL("image/png");
 
-    const pdf = new jsPDF("p", "mm", "a4");
+      const pdf = new jsPDF("p", "mm", "a4");
 
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
+      const pdfWidth = pdf.internal.pageSize.getWidth();
 
-    const imgWidth = pdfWidth;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const pdfHeight = pdf.internal.pageSize.getHeight();
 
-    let heightLeft = imgHeight;
-    let position = 0;
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      let heightLeft = imgHeight;
+      let position = 0;
 
-    heightLeft -= pdfHeight;
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-
-      pdf.addPage();
-
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
 
       heightLeft -= pdfHeight;
-    }
 
-    pdf.save(`${resume.contact.name.replace(/\s+/g, "_")}_Resume.pdf`);
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+
+        pdf.addPage();
+
+        pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
+
+        heightLeft -= pdfHeight;
+      }
+
+      const fileName =
+        resume.contact.name?.trim().replace(/\s+/g, "_") || "Resume";
+
+      pdf.save(`${fileName}_Resume.pdf`);
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+    }
   };
+
+  // ========================================
+  // RENDER
+  // ========================================
+
   return (
     <div
       className="flex min-h-screen bg-[#F8FAFC]"
-      style={{ fontFamily: "'Poppins', sans-serif" }}
+      style={{
+        fontFamily: "'Poppins', sans-serif",
+      }}
     >
       <Sidebar />
 
@@ -341,7 +417,7 @@ const ResumeEditor = () => {
           <div className="flex items-center gap-3">
             <Link
               to="/dashboard"
-              className="text-[#94A3B8] hover:text-[#2563EB] transition-colors text-sm"
+              className="text-[#94A3B8] hover:text-[#2563EB] text-sm"
             >
               ← Back
             </Link>
@@ -366,24 +442,24 @@ const ResumeEditor = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={handleSave}
-              className="text-xs font-semibold px-4 py-2 rounded-lg border border-[#E2E8F0] text-[#475569] hover:border-[#2563EB] hover:text-[#2563EB] transition-all"
+              className="text-xs font-semibold px-4 py-2 rounded-lg border border-[#E2E8F0] text-[#475569]"
             >
               {saved ? "✓ Saved" : "Save Changes"}
             </button>
 
-            <Link
-              to="/analysis"
+            <button
+              onClick={handleAnalyze}
               className="hidden md:block text-xs font-semibold text-white px-4 py-2 rounded-lg shadow-sm"
               style={{
                 background: "linear-gradient(135deg,#14B8A6,#0F766E)",
               }}
             >
               🤖 Analyze
-            </Link>
+            </button>
 
             <button
               onClick={exportPDF}
-              className="text-xs font-semibold text-white px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all"
+              className="text-xs font-semibold text-white px-4 py-2 rounded-lg shadow-sm"
               style={{
                 background: "linear-gradient(135deg,#2563EB,#1D4ED8)",
               }}
@@ -415,7 +491,7 @@ const ResumeEditor = () => {
                   <button
                     key={template.id}
                     onClick={() => setActiveTemplate(template.id)}
-                    className="py-2 rounded-lg text-[10px] font-semibold border transition-all"
+                    className="py-2 rounded-lg text-[10px] font-semibold border"
                     style={{
                       borderColor:
                         activeTemplate === template.id
@@ -424,7 +500,7 @@ const ResumeEditor = () => {
 
                       backgroundColor:
                         activeTemplate === template.id
-                          ? template.color + "15"
+                          ? `${template.color}15`
                           : "white",
 
                       color:
@@ -454,9 +530,9 @@ const ResumeEditor = () => {
                     <button
                       key={section}
                       onClick={() => setActiveSection(section)}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium text-left transition-all"
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium text-left"
                       style={{
-                        backgroundColor: active ? accent + "15" : "transparent",
+                        backgroundColor: active ? `${accent}15` : "transparent",
 
                         color: active ? accent : "#475569",
                       }}
@@ -505,9 +581,9 @@ const ResumeEditor = () => {
                         </label>
 
                         <input
-                          value={resume.contact[field]}
+                          value={resume.contact[field] || ""}
                           onChange={(e) => updateContact(field, e.target.value)}
-                          className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2 text-xs text-[#0F172A] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10"
+                          className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2 text-xs outline-none focus:border-[#2563EB]"
                         />
                       </div>
                     ))}
@@ -528,10 +604,10 @@ const ResumeEditor = () => {
                   </p>
 
                   <textarea
-                    value={resume.summary}
+                    value={resume.summary || ""}
                     onChange={(e) => updateSummary(e.target.value)}
                     rows={10}
-                    className="w-full border border-[#E2E8F0] rounded-xl px-3 py-3 text-xs text-[#475569] outline-none resize-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10 leading-relaxed"
+                    className="w-full border border-[#E2E8F0] rounded-xl px-3 py-3 text-xs text-[#475569] outline-none resize-none leading-relaxed"
                   />
                 </div>
               )}
@@ -555,14 +631,12 @@ const ResumeEditor = () => {
                             Experience {index + 1}
                           </span>
 
-                          {resume.experience.length > 1 && (
-                            <button
-                              onClick={() => removeExperience(index)}
-                              className="text-[10px] text-red-500 hover:text-red-700"
-                            >
-                              Remove
-                            </button>
-                          )}
+                          <button
+                            onClick={() => removeExperience(index)}
+                            className="text-[10px] text-red-500"
+                          >
+                            Remove
+                          </button>
                         </div>
 
                         <input
@@ -570,7 +644,7 @@ const ResumeEditor = () => {
                           onChange={(e) =>
                             updateExperience(index, "role", e.target.value)
                           }
-                          className="w-full bg-transparent text-xs font-bold text-[#0F172A] outline-none mb-2"
+                          className="w-full bg-white border border-[#E2E8F0] rounded-lg px-2 py-2 text-xs mb-2"
                         />
 
                         <input
@@ -578,8 +652,7 @@ const ResumeEditor = () => {
                           onChange={(e) =>
                             updateExperience(index, "company", e.target.value)
                           }
-                          className="w-full bg-white border border-[#E2E8F0] rounded-lg px-2 py-1.5 text-[10px] mb-2 outline-none"
-                          placeholder="Company"
+                          className="w-full bg-white border border-[#E2E8F0] rounded-lg px-2 py-2 text-xs mb-2"
                         />
 
                         <input
@@ -587,8 +660,7 @@ const ResumeEditor = () => {
                           onChange={(e) =>
                             updateExperience(index, "period", e.target.value)
                           }
-                          className="w-full bg-white border border-[#E2E8F0] rounded-lg px-2 py-1.5 text-[10px] mb-3 outline-none"
-                          placeholder="Period"
+                          className="w-full bg-white border border-[#E2E8F0] rounded-lg px-2 py-2 text-xs mb-3"
                         />
 
                         <div className="flex flex-col gap-2">
@@ -607,16 +679,12 @@ const ResumeEditor = () => {
                                 className="flex-1 text-[10px] border border-[#E2E8F0] rounded-lg p-2 outline-none resize-none"
                               />
 
-                              {experience.bullets.length > 1 && (
-                                <button
-                                  onClick={() =>
-                                    removeBullet(index, bulletIndex)
-                                  }
-                                  className="text-red-500 text-xs px-2 hover:text-red-700"
-                                >
-                                  ×
-                                </button>
-                              )}
+                              <button
+                                onClick={() => removeBullet(index, bulletIndex)}
+                                className="text-red-500 text-xs px-2"
+                              >
+                                ×
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -632,7 +700,7 @@ const ResumeEditor = () => {
 
                     <button
                       onClick={addExperience}
-                      className="w-full border-2 border-dashed border-[#CBD5E1] rounded-xl py-3 text-xs font-medium text-[#64748B] hover:border-[#2563EB] hover:text-[#2563EB] transition-all"
+                      className="w-full border-2 border-dashed border-[#CBD5E1] rounded-xl py-3 text-xs font-medium text-[#64748B]"
                     >
                       + Add Experience
                     </button>
@@ -659,63 +727,39 @@ const ResumeEditor = () => {
                             Education {index + 1}
                           </span>
 
-                          {resume.education.length > 1 && (
-                            <button
-                              onClick={() => removeEducation(index)}
-                              className="text-[10px] text-red-500 hover:text-red-700"
-                            >
-                              Remove
-                            </button>
-                          )}
+                          <button
+                            onClick={() => removeEducation(index)}
+                            className="text-[10px] text-red-500"
+                          >
+                            Remove
+                          </button>
                         </div>
 
-                        <div className="mb-3">
-                          <label className="block text-[10px] font-semibold text-[#94A3B8] uppercase mb-1">
-                            Degree
-                          </label>
+                        {[
+                          ["degree", "Degree"],
+                          ["school", "School"],
+                          ["period", "Period"],
+                        ].map(([field, label]) => (
+                          <div key={field} className="mb-3">
+                            <label className="block text-[10px] font-semibold text-[#94A3B8] uppercase mb-1">
+                              {label}
+                            </label>
 
-                          <input
-                            value={education.degree}
-                            onChange={(e) =>
-                              updateEducation(index, "degree", e.target.value)
-                            }
-                            className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2 text-xs outline-none"
-                          />
-                        </div>
-
-                        <div className="mb-3">
-                          <label className="block text-[10px] font-semibold text-[#94A3B8] uppercase mb-1">
-                            School
-                          </label>
-
-                          <input
-                            value={education.school}
-                            onChange={(e) =>
-                              updateEducation(index, "school", e.target.value)
-                            }
-                            className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2 text-xs outline-none"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-semibold text-[#94A3B8] uppercase mb-1">
-                            Period
-                          </label>
-
-                          <input
-                            value={education.period}
-                            onChange={(e) =>
-                              updateEducation(index, "period", e.target.value)
-                            }
-                            className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2 text-xs outline-none"
-                          />
-                        </div>
+                            <input
+                              value={education[field] || ""}
+                              onChange={(e) =>
+                                updateEducation(index, field, e.target.value)
+                              }
+                              className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2 text-xs outline-none"
+                            />
+                          </div>
+                        ))}
                       </div>
                     ))}
 
                     <button
                       onClick={addEducation}
-                      className="w-full border-2 border-dashed border-[#CBD5E1] rounded-xl py-3 text-xs font-medium text-[#64748B] hover:border-[#2563EB] hover:text-[#2563EB] transition-all"
+                      className="w-full border-2 border-dashed border-[#CBD5E1] rounded-xl py-3 text-xs font-medium text-[#64748B]"
                     >
                       + Add Education
                     </button>
@@ -741,7 +785,7 @@ const ResumeEditor = () => {
                         key={skill}
                         className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-semibold"
                         style={{
-                          backgroundColor: accent + "15",
+                          backgroundColor: `${accent}15`,
                           color: accent,
                         }}
                       >
@@ -794,7 +838,7 @@ const ResumeEditor = () => {
                   padding: "48px",
                 }}
               >
-                {/* Accent Line */}
+                {/* ACCENT LINE */}
 
                 <div
                   className="h-2 mb-7 rounded-full"
@@ -819,11 +863,8 @@ const ResumeEditor = () => {
 
                   <div className="flex flex-wrap gap-3 mt-3 text-[10px] text-[#64748B]">
                     <span>{resume.contact.email}</span>
-
                     <span>{resume.contact.phone}</span>
-
                     <span>{resume.contact.location}</span>
-
                     <span>{resume.contact.linkedin}</span>
                   </div>
                 </div>
@@ -879,7 +920,13 @@ const ResumeEditor = () => {
                             key={bulletIndex}
                             className="flex gap-2 text-[11px] leading-relaxed text-[#475569]"
                           >
-                            <span style={{ color: accent }}>•</span>
+                            <span
+                              style={{
+                                color: accent,
+                              }}
+                            >
+                              •
+                            </span>
 
                             {bullet}
                           </li>
@@ -905,7 +952,7 @@ const ResumeEditor = () => {
                         key={skill}
                         className="text-[10px] font-semibold px-3 py-1 rounded-full"
                         style={{
-                          backgroundColor: accent + "15",
+                          backgroundColor: `${accent}15`,
                           color: accent,
                         }}
                       >
