@@ -1,856 +1,1549 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import Sidebar from "../../components/Navbar/Sidebar";
 
-// ========================================
-// SCORE GAUGE COMPONENT
-// ========================================
+/* =========================================================
+   SCORE GAUGE
+========================================================= */
 
 function ScoreGauge({ score }) {
-  const r = 64;
-  const circ = 2 * Math.PI * r;
-  const dash = (score / 100) * circ;
+  const safeScore = Math.max(0, Math.min(100, Math.round(score)));
 
-  const color = score >= 85 ? "#22C55E" : score >= 70 ? "#F59E0B" : "#EF4444";
+  const radius = 72;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (safeScore / 100) * circumference;
 
-  const label =
-    score >= 85
-      ? "Excellent"
-      : score >= 70
-        ? "Good"
-        : score >= 50
-          ? "Fair"
-          : "Needs Work";
+  const getScoreColor = () => {
+    if (safeScore >= 85) return "text-green-500";
+    if (safeScore >= 70) return "text-amber-500";
+    return "text-red-500";
+  };
+
+  const getLabel = () => {
+    if (safeScore >= 85) return "Excellent";
+    if (safeScore >= 70) return "Good";
+    if (safeScore >= 55) return "Fair";
+    return "Needs Work";
+  };
 
   return (
     <div className="flex flex-col items-center">
-      <svg width="160" height="160" viewBox="0 0 160 160">
-        {/* Background Circle */}
-        <circle
-          cx="80"
-          cy="80"
-          r={r}
-          fill="none"
-          stroke="#E2E8F0"
-          strokeWidth="10"
-        />
+      <div className="relative w-48 h-48">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 180 180">
+          <circle
+            cx="90"
+            cy="90"
+            r={radius}
+            stroke="currentColor"
+            strokeWidth="14"
+            fill="transparent"
+            className="text-gray-100"
+          />
 
-        {/* Score Circle */}
-        <circle
-          cx="80"
-          cy="80"
-          r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth="10"
-          strokeDasharray={`${dash} ${circ}`}
-          strokeLinecap="round"
-          transform="rotate(-90 80 80)"
-          style={{
-            transition: "stroke-dasharray 1s ease",
-          }}
-        />
+          <circle
+            cx="90"
+            cy="90"
+            r={radius}
+            stroke="currentColor"
+            strokeWidth="14"
+            fill="transparent"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            className={`${getScoreColor()} transition-all duration-1000`}
+          />
+        </svg>
 
-        <text
-          x="80"
-          y="74"
-          textAnchor="middle"
-          fontSize="30"
-          fontWeight="800"
-          fill="#0F172A"
-          fontFamily="Poppins,sans-serif"
-        >
-          {score}
-        </text>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-4xl font-bold text-gray-900">{safeScore}</span>
+          <span className="text-sm text-gray-500">/ 100</span>
+        </div>
+      </div>
 
-        <text
-          x="80"
-          y="94"
-          textAnchor="middle"
-          fontSize="11"
-          fill="#94A3B8"
-          fontFamily="Poppins,sans-serif"
-        >
-          ATS Score
-        </text>
-      </svg>
-
-      <div className="text-sm font-bold mt-1" style={{ color }}>
-        {label}
+      <div className={`mt-2 font-semibold ${getScoreColor()}`}>
+        {getLabel()}
       </div>
     </div>
   );
 }
 
-// ========================================
-// MAIN COMPONENT
-// ========================================
+/* =========================================================
+   HELPERS
+========================================================= */
 
-const ResumeAnalysis = () => {
-  const [activeTab, setActiveTab] = useState("overview");
+const normalizeText = (value = "") =>
+  String(value)
+    .toLowerCase()
+    .replace(/[^\w\s+#./-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  const handleFix = (section) => {
-    if (section) {
-      localStorage.setItem("activeResumeSection", section);
-    }
+const unique = (items) => [...new Set(items.filter(Boolean))];
+
+const countWords = (text = "") =>
+  String(text).trim() ? String(text).trim().split(/\s+/).length : 0;
+
+const hasNumber = (text = "") => /\b\d+(?:\.\d+)?%?\b/.test(text);
+
+const hasImpactLanguage = (text = "") =>
+  /\b(increased|decreased|reduced|improved|saved|generated|grew|boosted|delivered|achieved|managed|supported|automated|optimized|accelerated|cut|raised|lowered|built|launched)\b/i.test(
+    text,
+  );
+
+const actionVerbs = [
+  "achieved",
+  "analyzed",
+  "architected",
+  "automated",
+  "built",
+  "collaborated",
+  "configured",
+  "created",
+  "deployed",
+  "designed",
+  "developed",
+  "delivered",
+  "engineered",
+  "implemented",
+  "improved",
+  "integrated",
+  "launched",
+  "led",
+  "managed",
+  "migrated",
+  "optimized",
+  "planned",
+  "reduced",
+  "resolved",
+  "streamlined",
+  "tested",
+  "trained",
+  "troubleshot",
+  "upgraded",
+];
+
+const weakPhrases = [
+  "responsible for",
+  "worked on",
+  "helped with",
+  "helped to",
+  "duties included",
+  "tasked with",
+  "involved in",
+  "participated in",
+  "was responsible",
+  "assisted with",
+];
+
+const fillerPhrases = [
+  "hard working",
+  "hardworking",
+  "team player",
+  "go getter",
+  "go-getter",
+  "passionate individual",
+  "motivated individual",
+  "results driven",
+  "results-driven",
+  "detail oriented",
+  "detail-oriented",
+  "excellent communication skills",
+  "excellent interpersonal skills",
+];
+
+/* =========================================================
+   ROLE PROFILES
+   =========================================================
+   Instead of judging every resume against the same keywords,
+   SmartResume first tries to understand what kind of resume
+   it is looking at.
+========================================================= */
+
+const ROLE_PROFILES = {
+  software: {
+    terms: [
+      "software",
+      "frontend",
+      "front end",
+      "backend",
+      "back end",
+      "full stack",
+      "fullstack",
+      "web developer",
+      "application developer",
+      "mobile developer",
+      "software engineer",
+    ],
+    keywords: [
+      "javascript",
+      "typescript",
+      "react",
+      "node.js",
+      "python",
+      "java",
+      "git",
+      "api",
+      "rest",
+      "database",
+      "sql",
+      "testing",
+      "github",
+    ],
+  },
+
+  devops: {
+    terms: [
+      "devops",
+      "cloud",
+      "site reliability",
+      "sre",
+      "platform engineer",
+      "cloud engineer",
+      "infrastructure",
+    ],
+    keywords: [
+      "aws",
+      "azure",
+      "gcp",
+      "docker",
+      "kubernetes",
+      "terraform",
+      "ansible",
+      "ci/cd",
+      "jenkins",
+      "github actions",
+      "linux",
+      "monitoring",
+      "logging",
+      "git",
+      "infrastructure",
+    ],
+  },
+
+  data: {
+    terms: [
+      "data analyst",
+      "data scientist",
+      "data engineer",
+      "analytics",
+      "machine learning",
+      "artificial intelligence",
+    ],
+    keywords: [
+      "python",
+      "sql",
+      "excel",
+      "power bi",
+      "tableau",
+      "pandas",
+      "numpy",
+      "statistics",
+      "machine learning",
+      "data visualization",
+      "etl",
+    ],
+  },
+
+  cybersecurity: {
+    terms: [
+      "cybersecurity",
+      "cyber security",
+      "security analyst",
+      "security engineer",
+      "information security",
+      "soc analyst",
+    ],
+    keywords: [
+      "siem",
+      "network security",
+      "firewall",
+      "linux",
+      "incident response",
+      "vulnerability",
+      "penetration testing",
+      "risk",
+      "threat",
+      "security",
+    ],
+  },
+
+  design: {
+    terms: [
+      "designer",
+      "ui designer",
+      "ux designer",
+      "product designer",
+      "graphic designer",
+      "visual designer",
+    ],
+    keywords: [
+      "figma",
+      "adobe",
+      "photoshop",
+      "illustrator",
+      "user experience",
+      "user interface",
+      "wireframes",
+      "prototyping",
+      "design systems",
+      "usability",
+    ],
+  },
+
+  marketing: {
+    terms: [
+      "marketing",
+      "digital marketing",
+      "social media",
+      "content marketing",
+      "brand",
+      "communications",
+    ],
+    keywords: [
+      "seo",
+      "content",
+      "social media",
+      "analytics",
+      "campaigns",
+      "branding",
+      "email marketing",
+      "copywriting",
+      "advertising",
+    ],
+  },
+
+  finance: {
+    terms: [
+      "accountant",
+      "accounting",
+      "finance",
+      "financial analyst",
+      "auditor",
+      "banking",
+    ],
+    keywords: [
+      "excel",
+      "financial analysis",
+      "accounting",
+      "budgeting",
+      "forecasting",
+      "audit",
+      "financial reporting",
+      "reconciliation",
+    ],
+  },
+
+  hr: {
+    terms: [
+      "human resources",
+      "hr",
+      "recruiter",
+      "talent acquisition",
+      "people operations",
+    ],
+    keywords: [
+      "recruitment",
+      "onboarding",
+      "employee relations",
+      "talent acquisition",
+      "hris",
+      "payroll",
+      "performance management",
+    ],
+  },
+
+  project: {
+    terms: [
+      "project manager",
+      "project management",
+      "program manager",
+      "scrum master",
+      "product manager",
+    ],
+    keywords: [
+      "agile",
+      "scrum",
+      "jira",
+      "stakeholder",
+      "project management",
+      "roadmap",
+      "kanban",
+      "planning",
+      "delivery",
+    ],
+  },
+
+  sales: {
+    terms: [
+      "sales",
+      "business development",
+      "account executive",
+      "sales representative",
+      "business development representative",
+    ],
+    keywords: [
+      "sales",
+      "lead generation",
+      "crm",
+      "customer acquisition",
+      "negotiation",
+      "pipeline",
+      "revenue",
+      "client relationships",
+    ],
+  },
+};
+
+/* =========================================================
+   NORMALIZATION
+========================================================= */
+
+function normalizeResume(data) {
+  const resume = data || {};
+
+  return {
+    contact: {
+      name: resume.contact?.name || "",
+      title: resume.contact?.title || "",
+      email: resume.contact?.email || "",
+      phone: resume.contact?.phone || "",
+      location: resume.contact?.location || "",
+      linkedin: resume.contact?.linkedin || "",
+    },
+
+    summary: resume.summary || "",
+
+    experience: Array.isArray(resume.experience)
+      ? resume.experience.map((item) => ({
+          role: item?.role || "",
+          company: item?.company || "",
+          period: item?.period || "",
+          bullets: Array.isArray(item?.bullets)
+            ? item.bullets.filter(Boolean)
+            : [],
+        }))
+      : [],
+
+    education: Array.isArray(resume.education)
+      ? resume.education.map((item) => ({
+          degree: item?.degree || "",
+          school: item?.school || "",
+          period: item?.period || "",
+        }))
+      : [],
+
+    skills: Array.isArray(resume.skills) ? resume.skills.filter(Boolean) : [],
   };
+}
 
-  // ========================================
-  // LOAD RESUME
-  // ========================================
+/* =========================================================
+   ROLE DETECTION
+========================================================= */
 
-  const [resume] = useState(() => {
-    try {
-      const savedResume = localStorage.getItem("resumeData");
-      return savedResume ? JSON.parse(savedResume) : null;
-    } catch (error) {
-      console.error("Failed to load resume:", error);
-      return null;
+function detectRole(resume) {
+  const source = normalizeText(
+    [
+      resume.contact.title,
+      resume.summary,
+      ...resume.skills,
+      ...resume.experience.map((item) => item.role),
+    ].join(" "),
+  );
+
+  let bestRole = null;
+  let bestScore = 0;
+
+  Object.entries(ROLE_PROFILES).forEach(([role, profile]) => {
+    let score = 0;
+
+    profile.terms.forEach((term) => {
+      if (source.includes(normalizeText(term))) {
+        score += 3;
+      }
+    });
+
+    profile.keywords.forEach((keyword) => {
+      if (source.includes(normalizeText(keyword))) {
+        score += 1;
+      }
+    });
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestRole = role;
     }
   });
 
-  // ========================================
-  // EMPTY STATE
-  // ========================================
+  return {
+    role: bestRole,
+    confidence: Math.min(100, Math.round((bestScore / 12) * 100)),
+  };
+}
+
+/* =========================================================
+   RESUME TEXT
+========================================================= */
+
+function buildResumeText(resume) {
+  return normalizeText(
+    [
+      resume.contact.name,
+      resume.contact.title,
+      resume.contact.email,
+      resume.contact.phone,
+      resume.contact.location,
+      resume.contact.linkedin,
+      resume.summary,
+
+      ...resume.experience.flatMap((item) => [
+        item.role,
+        item.company,
+        item.period,
+        ...item.bullets,
+      ]),
+
+      ...resume.education.flatMap((item) => [
+        item.degree,
+        item.school,
+        item.period,
+      ]),
+
+      ...resume.skills,
+    ].join(" "),
+  );
+}
+
+/* =========================================================
+   KEYWORD ANALYSIS
+========================================================= */
+
+function analyzeKeywords(resume, roleInfo) {
+  const text = buildResumeText(resume);
+
+  let keywords = [];
+
+  if (roleInfo.role) {
+    keywords = ROLE_PROFILES[roleInfo.role].keywords;
+  } else {
+    keywords = [
+      "communication",
+      "leadership",
+      "problem solving",
+      "project management",
+      "teamwork",
+      "analysis",
+      "research",
+      "documentation",
+    ];
+  }
+
+  const matched = keywords.filter((keyword) =>
+    text.includes(normalizeText(keyword)),
+  );
+
+  const missing = keywords.filter(
+    (keyword) => !text.includes(normalizeText(keyword)),
+  );
+
+  const score =
+    keywords.length === 0
+      ? 100
+      : Math.round((matched.length / keywords.length) * 100);
+
+  return {
+    matched,
+    missing,
+    score,
+  };
+}
+
+/* =========================================================
+   CONTACT ANALYSIS
+========================================================= */
+
+function analyzeContact(contact) {
+  const checks = {
+    name: Boolean(contact.name.trim()),
+    title: Boolean(contact.title.trim()),
+    email: Boolean(contact.email.trim()),
+    phone: Boolean(contact.phone.trim()),
+    location: Boolean(contact.location.trim()),
+    linkedin: Boolean(contact.linkedin.trim()),
+  };
+
+  const completed = Object.values(checks).filter(Boolean).length;
+
+  return {
+    checks,
+    score: Math.round((completed / 6) * 100),
+  };
+}
+
+/* =========================================================
+   EXPERIENCE ANALYSIS
+========================================================= */
+
+function analyzeExperience(experience) {
+  const bullets = experience.flatMap((item) => item.bullets || []);
+
+  if (!experience.length) {
+    return {
+      score: 0,
+      bulletCount: 0,
+      quantified: 0,
+      actionVerbBullets: 0,
+      impactBullets: 0,
+      weakPhraseCount: 0,
+      longBullets: 0,
+    };
+  }
+
+  const quantified = bullets.filter(hasNumber).length;
+
+  const actionVerbBullets = bullets.filter((bullet) => {
+    const firstWord = normalizeText(bullet).split(" ")[0];
+
+    return actionVerbs.includes(firstWord);
+  }).length;
+
+  const impactBullets = bullets.filter(hasImpactLanguage).length;
+
+  const weakPhraseCount = bullets.filter((bullet) =>
+    weakPhrases.some((phrase) =>
+      normalizeText(bullet).includes(normalizeText(phrase)),
+    ),
+  ).length;
+
+  const longBullets = bullets.filter(
+    (bullet) => countWords(bullet) > 35,
+  ).length;
+
+  const bulletQuality =
+    bullets.length === 0
+      ? 0
+      : Math.round(
+          (quantified / bullets.length) * 35 +
+            (actionVerbBullets / bullets.length) * 30 +
+            (impactBullets / bullets.length) * 25 -
+            (weakPhraseCount / bullets.length) * 10,
+        );
+
+  const structureScore = Math.min(
+    100,
+    experience.length * 20 + Math.min(bullets.length * 5, 40),
+  );
+
+  return {
+    score: Math.max(0, Math.round(bulletQuality * 0.7 + structureScore * 0.3)),
+    bulletCount: bullets.length,
+    quantified,
+    actionVerbBullets,
+    impactBullets,
+    weakPhraseCount,
+    longBullets,
+  };
+}
+
+/* =========================================================
+   SUMMARY ANALYSIS
+========================================================= */
+
+function analyzeSummary(summary) {
+  const words = countWords(summary);
+
+  if (!words) {
+    return {
+      score: 0,
+      words: 0,
+      hasFiller: false,
+      hasFirstPerson: false,
+    };
+  }
+
+  const normalized = normalizeText(summary);
+
+  const hasFiller = fillerPhrases.some((phrase) =>
+    normalized.includes(normalizeText(phrase)),
+  );
+
+  const hasFirstPerson = /\b(i|me|my|mine|myself)\b/i.test(summary);
+
+  let score = 40;
+
+  if (words >= 30) score += 20;
+  if (words >= 50) score += 15;
+  if (words <= 20) score -= 15;
+  if (words > 100) score -= 15;
+  if (hasFiller) score -= 10;
+  if (hasFirstPerson) score -= 5;
+
+  return {
+    score: Math.max(0, Math.min(100, score)),
+    words,
+    hasFiller,
+    hasFirstPerson,
+  };
+}
+
+/* =========================================================
+   SKILLS ANALYSIS
+========================================================= */
+
+function analyzeSkills(skills) {
+  const count = skills.length;
+
+  let score = 0;
+
+  if (count >= 8) score = 100;
+  else if (count >= 6) score = 90;
+  else if (count >= 4) score = 75;
+  else if (count >= 2) score = 55;
+  else if (count === 1) score = 30;
+
+  return {
+    count,
+    score,
+  };
+}
+
+/* =========================================================
+   EDUCATION ANALYSIS
+========================================================= */
+
+function analyzeEducation(education) {
+  if (!education.length) {
+    return {
+      score: 0,
+      complete: 0,
+    };
+  }
+
+  const complete = education.filter(
+    (item) => item.degree.trim() && item.school.trim(),
+  ).length;
+
+  return {
+    complete,
+    score: Math.round((complete / education.length) * 100),
+  };
+}
+
+/* =========================================================
+   READABILITY
+========================================================= */
+
+function analyzeReadability(resume) {
+  const bullets = resume.experience.flatMap((item) => item.bullets || []);
+
+  if (!bullets.length) {
+    return {
+      score: 60,
+      averageWords: 0,
+      longBullets: 0,
+    };
+  }
+
+  const totalWords = bullets.reduce(
+    (total, bullet) => total + countWords(bullet),
+    0,
+  );
+
+  const averageWords = Math.round(totalWords / bullets.length);
+
+  const longBullets = bullets.filter(
+    (bullet) => countWords(bullet) > 35,
+  ).length;
+
+  let score = 100;
+
+  if (averageWords > 30) score -= 15;
+  if (averageWords > 40) score -= 20;
+  if (longBullets > 1) score -= 15;
+
+  return {
+    score: Math.max(0, score),
+    averageWords,
+    longBullets,
+  };
+}
+
+/* =========================================================
+   STRUCTURE ANALYSIS
+========================================================= */
+
+function analyzeStructure(resume) {
+  const sections = {
+    contact: Boolean(resume.contact.name) || Boolean(resume.contact.email),
+
+    summary: Boolean(resume.summary.trim()),
+
+    experience: resume.experience.length > 0,
+
+    education: resume.education.length > 0,
+
+    skills: resume.skills.length > 0,
+  };
+
+  const completed = Object.values(sections).filter(Boolean).length;
+
+  return {
+    sections,
+    score: Math.round((completed / Object.keys(sections).length) * 100),
+  };
+}
+
+/* =========================================================
+   OVERALL SCORE
+========================================================= */
+
+function calculateOverall(scores) {
+  return Math.round(
+    scores.contact * 0.1 +
+      scores.structure * 0.1 +
+      scores.summary * 0.15 +
+      scores.experience * 0.2 +
+      scores.achievement * 0.15 +
+      scores.skills * 0.1 +
+      scores.education * 0.05 +
+      scores.keywords * 0.1 +
+      scores.readability * 0.05,
+  );
+}
+
+/* =========================================================
+   MAIN COMPONENT
+========================================================= */
+
+export default function ResumeAnalysis() {
+  const [resume, setResume] = useState(null);
+  const [activeTab, setActiveTab] = useState("overview");
+
+  useEffect(() => {
+    const stored =
+      localStorage.getItem("resumeData") || localStorage.getItem("cvData");
+
+    if (stored) {
+      try {
+        setResume(normalizeResume(JSON.parse(stored)));
+      } catch (error) {
+        console.error("Could not read resume data:", error);
+      }
+    }
+  }, []);
+
+  /* =======================================================
+     ANALYSIS
+  ======================================================= */
+
+  const analysis = useMemo(() => {
+    if (!resume) return null;
+
+    const roleInfo = detectRole(resume);
+
+    const contact = analyzeContact(resume.contact);
+
+    const structure = analyzeStructure(resume);
+
+    const summary = analyzeSummary(resume.summary);
+
+    const experience = analyzeExperience(resume.experience);
+
+    const skills = analyzeSkills(resume.skills);
+
+    const education = analyzeEducation(resume.education);
+
+    const readability = analyzeReadability(resume);
+
+    const keywordAnalysis = analyzeKeywords(resume, roleInfo);
+
+    const scores = {
+      contact: contact.score,
+      structure: structure.score,
+      summary: summary.score,
+      experience: experience.score,
+      achievement:
+        experience.bulletCount === 0
+          ? 0
+          : Math.round(
+              ((experience.quantified / experience.bulletCount) * 100 +
+                (experience.impactBullets / experience.bulletCount) * 100) /
+                2,
+            ),
+      skills: skills.score,
+      education: education.score,
+      keywords: keywordAnalysis.score,
+      readability: readability.score,
+    };
+
+    const overall = calculateOverall(scores);
+
+    return {
+      roleInfo,
+      contact,
+      structure,
+      summary,
+      experience,
+      skills,
+      education,
+      readability,
+      keywordAnalysis,
+      scores,
+      overall,
+    };
+  }, [resume]);
+
+  /* =======================================================
+     EMPTY STATE
+  ======================================================= */
 
   if (!resume) {
     return (
-      <div className="flex min-h-screen bg-[#F8FAFC]">
-        <Sidebar />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 max-w-md w-full text-center">
+          <div className="text-5xl mb-5">📄</div>
 
-        <main className="flex-1 md:ml-60 flex items-center justify-center p-6">
-          <div className="text-center max-w-sm">
-            <div className="text-5xl mb-4">📄</div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            No Resume Found
+          </h2>
 
-            <h1 className="text-xl font-bold text-[#0F172A]">
-              No Resume Found
-            </h1>
+          <p className="text-gray-500 mb-6">
+            Create or import a resume before running the analysis.
+          </p>
 
-            <p className="text-sm text-[#64748B] mt-2">
-              Create and save your resume before running an analysis.
-            </p>
-
+          <div className="flex flex-col gap-3">
             <Link
               to="/editor"
-              className="inline-block mt-5 bg-[#2563EB] text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#1D4ED8] transition"
+              className="w-full bg-gray-900 text-white py-3 rounded-xl font-semibold hover:bg-gray-800 transition"
             >
               Create Resume
             </Link>
+
+            <Link
+              to="/import-resume"
+              className="w-full border border-gray-200 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-50 transition"
+            >
+              Import Resume
+            </Link>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
 
-  // ========================================
-  // SAFETY FALLBACKS
-  // ========================================
-
-  const contact = resume.contact || {};
-  const experience = Array.isArray(resume.experience) ? resume.experience : [];
-  const education = Array.isArray(resume.education) ? resume.education : [];
-  const skills = Array.isArray(resume.skills) ? resume.skills : [];
-  const summary = resume.summary || "";
-
-  // ========================================
-  // BUILD RESUME TEXT
-  // ========================================
-
-  const resumeText = [
-    contact.name || "",
-    contact.title || "",
-    contact.email || "",
-    contact.phone || "",
-    contact.location || "",
-    contact.linkedin || "",
-    summary,
-
-    ...experience.flatMap((item) => [
-      item.role || "",
-      item.company || "",
-      item.period || "",
-      ...(Array.isArray(item.bullets) ? item.bullets : []),
-    ]),
-
-    ...education.flatMap((item) => [
-      item.degree || "",
-      item.school || "",
-      item.period || "",
-    ]),
-
-    ...skills,
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  // ========================================
-  // KEYWORD ANALYSIS
-  // ========================================
-
-  const targetKeywords = [
-    "React",
-    "TypeScript",
-    "JavaScript",
-    "Node.js",
-    "Python",
-    "AWS",
-    "Docker",
-    "Kubernetes",
-    "CI/CD",
-    "Terraform",
-    "Git",
-    "REST API",
-    "GraphQL",
-    "PostgreSQL",
-    "Agile",
-    "Microservices",
-  ];
-
-  const keywords = targetKeywords.map((word) => ({
-    word,
-    found: resumeText.includes(word.toLowerCase()),
-  }));
-
-  const foundKeywords = keywords.filter((keyword) => keyword.found);
-  const missingKeywords = keywords.filter((keyword) => !keyword.found);
-
-  const keywordScore = Math.round(
-    (foundKeywords.length / targetKeywords.length) * 100,
-  );
-
-  // ========================================
-  // CONTACT ANALYSIS
-  // ========================================
-
-  const contactFields = [
-    contact.name,
-    contact.email,
-    contact.phone,
-    contact.location,
-    contact.linkedin,
-  ];
-
-  const completedContactFields = contactFields.filter(
-    (field) => field && typeof field === "string" && field.trim() !== "",
-  ).length;
-
-  const contactScore = Math.round(
-    (completedContactFields / contactFields.length) * 100,
-  );
-
-  // ========================================
-  // EXPERIENCE ANALYSIS
-  // ========================================
-
-  const allBullets = experience.flatMap((item) =>
-    Array.isArray(item.bullets) ? item.bullets : [],
-  );
-
-  const experienceCount = experience.length;
-
-  // ========================================
-  // QUANTIFIED ACHIEVEMENTS
-  // ========================================
-
-  const quantifiedBullets = allBullets.filter(
-    (bullet) => typeof bullet === "string" && /\d/.test(bullet),
-  );
-
-  const achievementScore =
-    allBullets.length > 0
-      ? Math.round((quantifiedBullets.length / allBullets.length) * 100)
-      : 0;
-
-  // ========================================
-  // WEAK ACTION VERBS
-  // ========================================
-
-  const weakPhrases = [
-    "responsible for",
-    "worked on",
-    "helped with",
-    "tasked with",
-    "in charge of",
-    "participated in",
-    "involved in",
-  ];
-
-  const weakPhrasesFound = weakPhrases.filter((phrase) =>
-    resumeText.includes(phrase),
-  );
-
-  // ========================================
-  // SUMMARY ANALYSIS
-  // ========================================
-
-  let summaryScore = 0;
-
-  if (summary.length >= 150) {
-    summaryScore = 100;
-  } else if (summary.length >= 100) {
-    summaryScore = 85;
-  } else if (summary.length >= 60) {
-    summaryScore = 65;
-  } else if (summary.length > 0) {
-    summaryScore = 35;
-  }
-
-  // ========================================
-  // SKILLS ANALYSIS
-  // ========================================
-
-  let skillsScore = 0;
-
-  if (skills.length >= 10) {
-    skillsScore = 100;
-  } else if (skills.length >= 8) {
-    skillsScore = 85;
-  } else if (skills.length >= 5) {
-    skillsScore = 65;
-  } else if (skills.length > 0) {
-    skillsScore = 40;
-  }
-
-  // ========================================
-  // SCORE CALCULATION
-  // ========================================
-
-  let score = 0;
-
-  // Contact = 15
-  score += Math.round((contactScore / 100) * 15);
-
-  // Summary = 15
-  score += Math.round((summaryScore / 100) * 15);
-
-  // Experience = 20
-  if (experienceCount >= 3) {
-    score += 20;
-  } else if (experienceCount === 2) {
-    score += 17;
-  } else if (experienceCount === 1) {
-    score += 12;
-  }
-
-  // Skills = 10
-  score += Math.round((skillsScore / 100) * 10);
-
-  // Education = 10
-  if (education.length >= 2) {
-    score += 10;
-  } else if (education.length === 1) {
-    score += 8;
-  }
-
-  // Keywords = 15
-  score += Math.round((keywordScore / 100) * 15);
-
-  // Achievements = 15
-  score += Math.round((achievementScore / 100) * 15);
-
-  score = Math.min(score, 100);
-
-  // ========================================
-  // SUGGESTIONS
-  // ========================================
+  /* =======================================================
+     SUGGESTIONS
+  ======================================================= */
 
   const suggestions = [];
 
-  if (missingKeywords.length > 0) {
+  if (analysis.scores.contact < 100) {
     suggestions.push({
-      type: "error",
-      icon: "⚠️",
-      label: "Missing Keywords",
-      section: "Skills",
-      desc: `Consider adding relevant keywords such as ${missingKeywords
-        .slice(0, 4)
-        .map((keyword) => `'${keyword.word}'`)
-        .join(", ")} where they accurately reflect your skills and experience.`,
-      points: `+${Math.min(missingKeywords.length * 2, 10)} pts`,
-      color: "#EF4444",
-      bg: "#FEF2F2",
+      section: "Contact",
+      title: "Complete your contact information",
+      description:
+        "Make sure your name, professional title, email, phone number, location and LinkedIn profile are included where relevant.",
     });
   }
 
-  if (weakPhrasesFound.length > 0) {
+  if (analysis.summary.score < 70) {
+    if (!resume.summary.trim()) {
+      suggestions.push({
+        section: "Summary",
+        title: "Add a professional summary",
+        description:
+          "Introduce who you are, your strongest skills and the type of value you can bring to an employer.",
+      });
+    } else {
+      suggestions.push({
+        section: "Summary",
+        title: "Strengthen your professional summary",
+        description:
+          "Aim for a concise summary that communicates your role, strongest capabilities and career direction rather than generic statements.",
+      });
+    }
+  }
+
+  if (analysis.experience.bulletCount === 0) {
     suggestions.push({
-      type: "warning",
-      icon: "💡",
-      label: "Weak Action Verbs",
       section: "Experience",
-      desc: `Replace phrases like "${weakPhrasesFound[0]}" with stronger action verbs such as "Led", "Built", "Developed", or "Delivered".`,
-      points: "+4 pts",
-      color: "#F59E0B",
-      bg: "#FFFBEB",
+      title: "Add experience details",
+      description:
+        "Describe your work, internship, volunteer or project experience using concise achievement-focused bullet points.",
     });
   }
 
   if (
-    allBullets.length > 0 &&
-    quantifiedBullets.length < Math.ceil(allBullets.length / 2)
+    analysis.experience.bulletCount > 0 &&
+    analysis.experience.quantified <
+      Math.max(1, Math.ceil(analysis.experience.bulletCount * 0.3))
   ) {
     suggestions.push({
-      type: "warning",
-      icon: "📊",
-      label: "Add Measurable Results",
       section: "Experience",
-      desc: `Only ${quantifiedBullets.length} of ${allBullets.length} achievement bullets contain measurable results. Add numbers, percentages, or measurable outcomes where possible.`,
-      points: "+5 pts",
-      color: "#F59E0B",
-      bg: "#FFFBEB",
+      title: "Add measurable achievements",
+      description:
+        "Where possible, show scale or impact using numbers, percentages, time saved, users supported, projects completed or other measurable outcomes.",
     });
   }
 
-  if (completedContactFields < 5) {
+  if (analysis.experience.weakPhraseCount > 0) {
     suggestions.push({
-      type: "warning",
-      icon: "📧",
-      label: "Contact Info Incomplete",
-      section: "Contact",
-      desc: `${5 - completedContactFields} contact field${
-        5 - completedContactFields > 1 ? "s are" : " is"
-      } missing. Complete your contact information to make it easier for recruiters to reach you.`,
-      points: "+3 pts",
-      color: "#F59E0B",
-      bg: "#FFFBEB",
-    });
-  }
-
-  if (!summary || summary.length < 80) {
-    suggestions.push({
-      type: "info",
-      icon: "📝",
-      label: "Improve Professional Summary",
-      section: "Summary",
-      desc: "Add a stronger professional summary highlighting your experience, key skills, and the value you bring to employers.",
-      points: "+5 pts",
-      color: "#2563EB",
-      bg: "#EFF6FF",
-    });
-  }
-
-  if (experienceCount === 0) {
-    suggestions.push({
-      type: "error",
-      icon: "💼",
-      label: "No Experience Added",
       section: "Experience",
-      desc: "Add relevant work experience, internships, volunteer roles, or personal projects to strengthen your resume.",
-      points: "+10 pts",
-      color: "#EF4444",
-      bg: "#FEF2F2",
+      title: "Replace weak phrases with stronger action verbs",
+      description:
+        "Phrases such as 'responsible for' and 'worked on' describe duties but do not show your contribution clearly. Start bullets with strong action verbs.",
     });
   }
 
-  if (skills.length < 5) {
+  if (analysis.experience.longBullets > 0) {
     suggestions.push({
-      type: "info",
-      icon: "🛠️",
-      label: "Expand Your Skills",
+      section: "Experience",
+      title: "Shorten lengthy bullet points",
+      description:
+        "Break long descriptions into focused bullets so recruiters can quickly identify your contribution and results.",
+    });
+  }
+
+  if (analysis.skills.count < 5) {
+    suggestions.push({
       section: "Skills",
-      desc: "Add more relevant technical or professional skills that accurately represent your capabilities.",
-      points: "+4 pts",
-      color: "#2563EB",
-      bg: "#EFF6FF",
+      title: "Expand your skills section",
+      description:
+        "Include relevant technical, professional and tool-based skills that you can genuinely demonstrate.",
     });
   }
 
-  // ========================================
-  // STRENGTHS
-  // ========================================
-
-  if (
-    allBullets.length > 0 &&
-    quantifiedBullets.length >= Math.ceil(allBullets.length / 2)
-  ) {
+  if (analysis.education.score < 100) {
     suggestions.push({
-      type: "success",
-      icon: "✅",
-      label: "Quantified Achievements",
-      section: "Experience",
-      desc: `Great job! ${quantifiedBullets.length} of ${allBullets.length} achievement bullets contain measurable results.`,
-      points: "Good",
-      color: "#22C55E",
-      bg: "#F0FDF4",
+      section: "Education",
+      title: "Complete your education details",
+      description:
+        "Include the qualification, institution and relevant dates where appropriate.",
     });
   }
 
-  if (skills.length >= 8) {
+  if (analysis.keywordAnalysis.missing.length > 0) {
     suggestions.push({
-      type: "success",
-      icon: "🎯",
-      label: "Strong Skills Section",
       section: "Skills",
-      desc: `Your resume contains ${skills.length} skills, giving recruiters a clear overview of your capabilities.`,
-      points: "Strong",
-      color: "#22C55E",
-      bg: "#F0FDF4",
+      title: "Consider adding relevant role keywords",
+      description: `Your resume may benefit from relevant terms such as ${analysis.keywordAnalysis.missing
+        .slice(0, 5)
+        .join(", ")} if they genuinely match your experience.`,
     });
   }
 
-  if (completedContactFields === 5) {
+  if (analysis.readability.score < 80) {
     suggestions.push({
-      type: "success",
-      icon: "📇",
-      label: "Complete Contact Information",
-      section: "Contact",
-      desc: "Your essential contact information is complete and easy for recruiters to access.",
-      points: "Complete",
-      color: "#22C55E",
-      bg: "#F0FDF4",
+      section: "Experience",
+      title: "Improve readability",
+      description:
+        "Keep experience bullets concise, specific and easy to scan. Avoid packing multiple ideas into one sentence.",
     });
   }
 
-  if (summary.length >= 100) {
-    suggestions.push({
-      type: "success",
-      icon: "✨",
-      label: "Strong Professional Summary",
-      section: "Summary",
-      desc: "Your professional summary provides a clear introduction to your background and professional value.",
-      points: "Strong",
-      color: "#22C55E",
-      bg: "#F0FDF4",
-    });
+  const strengths = [];
+
+  if (analysis.scores.contact >= 85) {
+    strengths.push("Your contact information is well structured.");
   }
 
-  const issuesFound = suggestions.filter(
-    (item) =>
-      item.type === "error" || item.type === "warning" || item.type === "info",
-  ).length;
+  if (analysis.scores.summary >= 80) {
+    strengths.push("Your professional summary is strong.");
+  }
 
-  const potentialGain = Math.max(0, 100 - score);
+  if (analysis.experience.actionVerbBullets > 0) {
+    strengths.push("Your experience uses action-oriented language.");
+  }
+
+  if (analysis.experience.quantified > 0) {
+    strengths.push("You have included measurable results.");
+  }
+
+  if (analysis.skills.count >= 6) {
+    strengths.push("Your skills section contains a useful range of skills.");
+  }
+
+  if (analysis.keywordAnalysis.matched.length >= 3) {
+    strengths.push("Your resume contains relevant role-specific keywords.");
+  }
+
+  /* =======================================================
+     FIX HANDLER
+  ======================================================= */
+
+  const handleFix = (section) => {
+    localStorage.setItem("activeResumeSection", section);
+  };
+
+  /* =======================================================
+     UI
+  ======================================================= */
 
   return (
-    <div
-      className="flex min-h-screen bg-[#F8FAFC]"
-      style={{ fontFamily: "'Poppins', sans-serif" }}
-    >
-      <Sidebar />
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
 
-      <main className="flex-1 md:ml-60 p-6 md:p-10">
-        {/* HEADER */}
-
-        <div className="flex items-center justify-between mb-8">
+      <header className="bg-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
           <div>
             <Link
               to="/dashboard"
-              className="text-xs text-[#94A3B8] hover:text-[#475569]"
+              className="text-sm text-gray-500 hover:text-gray-900"
             >
               ← Dashboard
             </Link>
 
-            <h1 className="font-extrabold text-[#0F172A] text-2xl mt-1">
-              Resume Analysis 🤖
+            <h1 className="text-2xl font-bold text-gray-900 mt-2">
+              Resume Analysis
             </h1>
 
-            <p className="text-[#94A3B8] text-sm">
-              {contact.title || "Professional"} Resume · Analyzed just now
+            <p className="text-gray-500 text-sm mt-1">
+              Understand how strong your resume is and where you can improve it.
             </p>
           </div>
 
           <Link
             to="/editor"
-            className="hidden md:flex items-center gap-2 text-white text-sm font-semibold px-5 py-2.5 rounded-xl"
-            style={{
-              background: "linear-gradient(135deg,#2563EB,#1D4ED8)",
-            }}
+            className="bg-gray-900 text-white px-5 py-3 rounded-xl font-semibold hover:bg-gray-800 transition"
           >
-            ✏ Edit Resume
+            Edit Resume
           </Link>
         </div>
+      </header>
 
-        {/* SCORE */}
+      {/* Main */}
 
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm p-6 flex flex-col items-center">
-            <ScoreGauge score={score} />
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* Score Card */}
 
-            <div className="w-full mt-5 flex flex-col gap-3">
-              {[
-                {
-                  label: "Keywords",
-                  val: keywordScore,
-                  color: "#2563EB",
-                },
-                {
-                  label: "Contact",
-                  val: contactScore,
-                  color: "#22C55E",
-                },
-                {
-                  label: "Summary",
-                  val: summaryScore,
-                  color: "#14B8A6",
-                },
-                {
-                  label: "Achievements",
-                  val: achievementScore,
-                  color: "#F59E0B",
-                },
-              ].map(({ label, val, color }) => (
-                <div key={label}>
-                  <div className="flex justify-between text-xs text-[#475569] mb-1">
-                    <span>{label}</span>
+        <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 mb-8">
+          <div className="grid lg:grid-cols-[240px_1fr] gap-10 items-center">
+            <ScoreGauge score={analysis.overall} />
 
-                    <span className="font-semibold" style={{ color }}>
-                      {val}%
-                    </span>
-                  </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-3 mb-3">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Resume Score
+                </h2>
 
-                  <div className="h-1.5 bg-[#F1F5F9] rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${val}%`,
-                        backgroundColor: color,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
+                {analysis.roleInfo.role && (
+                  <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold capitalize">
+                    {analysis.roleInfo.role} profile
+                  </span>
+                )}
+              </div>
+
+              <p className="text-gray-600 leading-7 max-w-2xl">
+                Your score is based on resume structure, contact information,
+                summary quality, experience, achievements, skills, education,
+                relevant keywords and readability.
+              </p>
+
+              <div className="grid sm:grid-cols-3 gap-4 mt-7">
+                <ScoreMini
+                  label="Experience"
+                  score={analysis.scores.experience}
+                />
+
+                <ScoreMini label="Keywords" score={analysis.scores.keywords} />
+
+                <ScoreMini
+                  label="Readability"
+                  score={analysis.scores.readability}
+                />
+              </div>
             </div>
           </div>
+        </section>
 
-          {/* STATS */}
+        {/* Tabs */}
 
-          <div className="md:col-span-2 grid grid-cols-2 gap-4">
-            {[
-              {
-                label: "Keywords Found",
-                val: `${foundKeywords.length}/${targetKeywords.length}`,
-                icon: "🔑",
-                color: "#2563EB",
-                bg: "#EFF6FF",
-                sub: `${missingKeywords.length} missing`,
-              },
-              {
-                label: "Potential Gain",
-                val: `+${potentialGain} pts`,
-                icon: "📈",
-                color: "#22C55E",
-                bg: "#F0FDF4",
-                sub:
-                  potentialGain === 0
-                    ? "Excellent score"
-                    : "Improve resume sections",
-              },
-              {
-                label: "Issues Found",
-                val: issuesFound,
-                icon: "⚠️",
-                color: "#F59E0B",
-                bg: "#FFFBEB",
-                sub: issuesFound === 0 ? "Looking great!" : "Areas to improve",
-              },
-              {
-                label: "Contact Score",
-                val: `${contactScore}%`,
-                icon: "📇",
-                color: "#14B8A6",
-                bg: "#F0FDFA",
-                sub: "Profile completeness",
-              },
-            ].map(({ label, val, icon, color, bg, sub }) => (
-              <div
-                key={label}
-                className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm p-5"
-              >
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center text-xl mb-3"
-                  style={{ backgroundColor: bg }}
-                >
-                  {icon}
-                </div>
-
-                <div className="font-extrabold text-[#0F172A] text-xl">
-                  {val}
-                </div>
-
-                <div className="text-xs text-[#94A3B8] mt-0.5">{label}</div>
-
-                <div className="text-[10px] font-medium mt-1" style={{ color }}>
-                  {sub}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* TABS */}
-
-        <div className="flex gap-1 bg-[#F1F5F9] rounded-xl p-1 mb-6 w-fit">
-          {["overview", "keywords", "suggestions"].map((tab) => (
+        <div className="flex gap-2 bg-white p-2 rounded-2xl border border-gray-100 mb-6 w-fit">
+          {[
+            ["overview", "Overview"],
+            ["keywords", "Keywords"],
+            ["suggestions", "Suggestions"],
+          ].map(([id, label]) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className="px-5 py-2 rounded-lg text-xs font-semibold capitalize"
-              style={{
-                backgroundColor: activeTab === tab ? "white" : "transparent",
-                color: activeTab === tab ? "#0F172A" : "#94A3B8",
-              }}
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                activeTab === id
+                  ? "bg-gray-900 text-white"
+                  : "text-gray-500 hover:text-gray-900"
+              }`}
             >
-              {tab}
+              {label}
             </button>
           ))}
         </div>
 
-        {/* OVERVIEW */}
+        {/* =================================================
+            OVERVIEW TAB
+        ================================================= */}
 
         {activeTab === "overview" && (
-          <div className="grid md:grid-cols-2 gap-4">
-            {suggestions.length > 0 ? (
-              suggestions
-                .slice(0, 6)
-                .map(({ icon, label, desc, points, color, bg }) => (
-                  <div
-                    key={label}
-                    className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm p-5 flex gap-4"
-                  >
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-                      style={{ backgroundColor: bg }}
-                    >
-                      {icon}
-                    </div>
+          <div className="grid lg:grid-cols-2 gap-6">
+            <AnalysisCard
+              title="Resume Structure"
+              score={analysis.scores.structure}
+            >
+              <AnalysisRow
+                label="Contact"
+                value={analysis.structure.sections.contact}
+              />
 
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <div className="font-bold text-[#0F172A] text-sm">
-                          {label}
-                        </div>
+              <AnalysisRow
+                label="Summary"
+                value={analysis.structure.sections.summary}
+              />
 
-                        <span
-                          className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                          style={{
-                            color,
-                            backgroundColor: bg,
-                          }}
-                        >
-                          {points}
-                        </span>
-                      </div>
+              <AnalysisRow
+                label="Experience"
+                value={analysis.structure.sections.experience}
+              />
 
-                      <p className="text-xs text-[#475569] leading-relaxed">
-                        {desc}
-                      </p>
-                    </div>
-                  </div>
-                ))
-            ) : (
-              <div className="md:col-span-2 bg-white rounded-2xl border border-[#E2E8F0] p-10 text-center">
-                <div className="text-4xl mb-3">🎉</div>
-                <h3 className="font-bold text-[#0F172A]">
-                  Your resume looks great!
-                </h3>
-                <p className="text-sm text-[#64748B] mt-2">
-                  No major improvement areas were detected.
-                </p>
+              <AnalysisRow
+                label="Education"
+                value={analysis.structure.sections.education}
+              />
+
+              <AnalysisRow
+                label="Skills"
+                value={analysis.structure.sections.skills}
+              />
+            </AnalysisCard>
+
+            <AnalysisCard
+              title="Contact Information"
+              score={analysis.scores.contact}
+            >
+              <AnalysisRow label="Name" value={analysis.contact.checks.name} />
+
+              <AnalysisRow
+                label="Professional Title"
+                value={analysis.contact.checks.title}
+              />
+
+              <AnalysisRow
+                label="Email"
+                value={analysis.contact.checks.email}
+              />
+
+              <AnalysisRow
+                label="Phone"
+                value={analysis.contact.checks.phone}
+              />
+
+              <AnalysisRow
+                label="Location"
+                value={analysis.contact.checks.location}
+              />
+
+              <AnalysisRow
+                label="LinkedIn"
+                value={analysis.contact.checks.linkedin}
+              />
+            </AnalysisCard>
+
+            <AnalysisCard
+              title="Experience Quality"
+              score={analysis.scores.experience}
+            >
+              <StatRow
+                label="Experience entries"
+                value={resume.experience.length}
+              />
+
+              <StatRow
+                label="Total bullets"
+                value={analysis.experience.bulletCount}
+              />
+
+              <StatRow
+                label="Bullets with numbers"
+                value={analysis.experience.quantified}
+              />
+
+              <StatRow
+                label="Action-oriented bullets"
+                value={analysis.experience.actionVerbBullets}
+              />
+
+              <StatRow
+                label="Impact-focused bullets"
+                value={analysis.experience.impactBullets}
+              />
+            </AnalysisCard>
+
+            <AnalysisCard
+              title="Professional Summary"
+              score={analysis.scores.summary}
+            >
+              <p className="text-gray-600 leading-7">
+                {resume.summary ||
+                  "No professional summary has been added yet."}
+              </p>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <InfoBadge label={`${analysis.summary.words} words`} />
+
+                {analysis.summary.hasFiller && (
+                  <InfoBadge label="Contains generic phrases" />
+                )}
+
+                {analysis.summary.hasFirstPerson && (
+                  <InfoBadge label="Uses first-person language" />
+                )}
               </div>
-            )}
+            </AnalysisCard>
+
+            <AnalysisCard title="Skills" score={analysis.scores.skills}>
+              <div className="flex flex-wrap gap-2">
+                {resume.skills.length ? (
+                  resume.skills.map((skill, index) => (
+                    <span
+                      key={`${skill}-${index}`}
+                      className="px-3 py-2 bg-gray-100 rounded-lg text-sm text-gray-700"
+                    >
+                      {skill}
+                    </span>
+                  ))
+                ) : (
+                  <p className="text-gray-500">No skills added yet.</p>
+                )}
+              </div>
+            </AnalysisCard>
+
+            <AnalysisCard title="Strengths" score={null}>
+              {strengths.length ? (
+                <div className="space-y-3">
+                  {strengths.map((strength, index) => (
+                    <div key={index} className="flex gap-3">
+                      <span className="text-green-500">✓</span>
+
+                      <p className="text-gray-600">{strength}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">
+                  Keep improving your resume to build stronger strengths.
+                </p>
+              )}
+            </AnalysisCard>
           </div>
         )}
 
-        {/* KEYWORDS */}
+        {/* =================================================
+            KEYWORDS TAB
+        ================================================= */}
 
         {activeTab === "keywords" && (
-          <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm p-6">
-            <h3 className="font-bold text-[#0F172A] text-sm mb-1">
-              Keyword Analysis
-            </h3>
+          <div className="grid lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-3xl border border-gray-100 p-7">
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Relevant Keywords
+                  </h2>
 
-            <p className="text-xs text-[#94A3B8] mb-5">
-              Analysis based on common industry keywords and resume best
-              practices.
-            </p>
-
-            <div className="flex flex-wrap gap-2">
-              {keywords.map(({ word, found }) => (
-                <div
-                  key={word}
-                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border"
-                  style={{
-                    borderColor: found ? "#22C55E40" : "#EF444440",
-                    backgroundColor: found ? "#F0FDF4" : "#FEF2F2",
-                    color: found ? "#22C55E" : "#EF4444",
-                  }}
-                >
-                  <span>{found ? "✓" : "✕"}</span>
-                  {word}
+                  <p className="text-sm text-gray-500 mt-1">
+                    Based on your resume's apparent role.
+                  </p>
                 </div>
-              ))}
+
+                <span className="text-2xl font-bold text-gray-900">
+                  {analysis.scores.keywords}%
+                </span>
+              </div>
+
+              {analysis.keywordAnalysis.matched.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {analysis.keywordAnalysis.matched.map((keyword) => (
+                    <span
+                      key={keyword}
+                      className="px-3 py-2 rounded-lg bg-green-50 text-green-700 text-sm font-medium"
+                    >
+                      ✓ {keyword}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">
+                  No strong role-specific keywords were detected.
+                </p>
+              )}
+            </div>
+
+            <div className="bg-white rounded-3xl border border-gray-100 p-7">
+              <h2 className="text-xl font-bold text-gray-900">
+                Keywords You May Be Missing
+              </h2>
+
+              <p className="text-sm text-gray-500 mt-1 mb-5">
+                Only add these when they genuinely describe your skills or
+                experience.
+              </p>
+
+              {analysis.keywordAnalysis.missing.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {analysis.keywordAnalysis.missing.map((keyword) => (
+                    <span
+                      key={keyword}
+                      className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm"
+                    >
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-green-600 font-medium">
+                  Great! Your resume covers the detected role keywords.
+                </p>
+              )}
             </div>
           </div>
         )}
 
-        {/* SUGGESTIONS */}
+        {/* =================================================
+            SUGGESTIONS TAB
+        ================================================= */}
 
         {activeTab === "suggestions" && (
-          <div className="flex flex-col gap-3">
-            {suggestions
-              .filter((item) => item.type !== "success")
-              .map(({ icon, label, desc, points, color, bg, section }) => (
+          <div className="space-y-4">
+            {suggestions.length ? (
+              suggestions.map((suggestion, index) => (
                 <div
-                  key={label}
-                  className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm p-5 flex gap-4 items-start"
+                  key={index}
+                  className="bg-white rounded-2xl border border-gray-100 p-6 flex items-start justify-between gap-6"
                 >
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-                    style={{ backgroundColor: bg }}
-                  >
-                    {icon}
-                  </div>
-
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="font-bold text-[#0F172A] text-sm">
-                        {label}
-                      </div>
-
-                      <span
-                        className="text-[10px] font-bold px-2.5 py-0.5 rounded-full"
-                        style={{
-                          color,
-                          backgroundColor: bg,
-                        }}
-                      >
-                        {points}
-                      </span>
+                  <div className="flex gap-4">
+                    <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0">
+                      💡
                     </div>
 
-                    <p className="text-xs text-[#475569] leading-relaxed">
-                      {desc}
-                    </p>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-bold text-gray-900">
+                          {suggestion.title}
+                        </h3>
+
+                        <span className="text-xs px-2 py-1 bg-gray-100 rounded-full text-gray-500">
+                          {suggestion.section}
+                        </span>
+                      </div>
+
+                      <p className="text-gray-500 mt-2 leading-6">
+                        {suggestion.description}
+                      </p>
+                    </div>
                   </div>
 
                   <Link
                     to="/editor"
-                    onClick={() => handleFix(section)}
-                    className="text-xs font-semibold text-[#2563EB] bg-[#EFF6FF] px-3 py-1.5 rounded-lg hover:bg-[#DBEAFE] transition-colors flex-shrink-0 self-center"
+                    onClick={() => handleFix(suggestion.section)}
+                    className="text-sm font-semibold text-gray-900 whitespace-nowrap hover:underline"
                   >
                     Fix →
                   </Link>
                 </div>
-              ))}
+              ))
+            ) : (
+              <div className="bg-white rounded-3xl border border-gray-100 p-10 text-center">
+                <div className="text-5xl mb-4">🎉</div>
 
-            {issuesFound === 0 && (
-              <div className="bg-white rounded-2xl border border-[#E2E8F0] p-10 text-center">
-                <div className="text-4xl mb-3">🎉</div>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Your resume looks strong!
+                </h2>
 
-                <h3 className="font-bold text-[#0F172A]">
-                  No major issues found!
-                </h3>
-
-                <p className="text-sm text-[#64748B] mt-2">
-                  Your resume meets the main quality checks.
+                <p className="text-gray-500 mt-2">
+                  No major issues were detected.
                 </p>
               </div>
             )}
           </div>
         )}
+
+        {/* Footer */}
+
+        <div className="mt-8 text-center text-sm text-gray-400">
+          SmartResume analyzes resume structure and content patterns.
+          Recommendations are intended to help you improve your resume, not
+          guarantee hiring outcomes.
+        </div>
       </main>
     </div>
   );
-};
+}
 
-export default ResumeAnalysis;
+/* =========================================================
+   SMALL COMPONENTS
+========================================================= */
+
+function ScoreMini({ label, score }) {
+  return (
+    <div className="border border-gray-100 rounded-xl p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm text-gray-500">{label}</span>
+
+        <span className="font-bold text-gray-900">{score}</span>
+      </div>
+
+      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-gray-900 rounded-full transition-all"
+          style={{
+            width: `${Math.max(0, Math.min(100, score))}%`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function AnalysisCard({ title, score, children }) {
+  return (
+    <div className="bg-white rounded-3xl border border-gray-100 p-7">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-gray-900">{title}</h2>
+
+        {score !== null && score !== undefined && (
+          <span className="font-bold text-gray-900">{score}/100</span>
+        )}
+      </div>
+
+      {children}
+    </div>
+  );
+}
+
+function AnalysisRow({ label, value }) {
+  return (
+    <div className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
+      <span className="text-gray-600">{label}</span>
+
+      <span
+        className={`font-semibold ${value ? "text-green-500" : "text-red-400"}`}
+      >
+        {value ? "✓" : "Missing"}
+      </span>
+    </div>
+  );
+}
+
+function StatRow({ label, value }) {
+  return (
+    <div className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
+      <span className="text-gray-600">{label}</span>
+
+      <span className="font-bold text-gray-900">{value}</span>
+    </div>
+  );
+}
+
+function InfoBadge({ label }) {
+  return (
+    <span className="px-3 py-2 bg-gray-100 rounded-lg text-xs font-medium text-gray-600">
+      {label}
+    </span>
+  );
+}

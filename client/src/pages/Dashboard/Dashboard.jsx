@@ -12,6 +12,7 @@ import {
   BrainCircuit,
   ChevronRight,
   Clock,
+  Upload,
 } from "lucide-react";
 
 import Sidebar from "../../components/Navbar/Sidebar";
@@ -43,6 +44,12 @@ const actions = [
     label: "Create Resume",
     desc: "Build a new professional resume",
     to: "/editor",
+  },
+  {
+    icon: Upload,
+    label: "Import Resume",
+    desc: "Upload an existing PDF or DOCX resume",
+    to: "/import-resume",
   },
   {
     icon: Sparkles,
@@ -131,7 +138,10 @@ const Dashboard = () => {
       <Sidebar />
 
       <main className="flex-1 md:ml-60">
-        {/* Top Header */}
+        {/* ========================================
+            TOP HEADER
+        ======================================== */}
+
         <header className="bg-white border-b border-[#E2E8F0]">
           <div className="px-6 md:px-10 py-5 flex items-center justify-between">
             <div>
@@ -144,19 +154,36 @@ const Dashboard = () => {
               </h1>
             </div>
 
-            <Link
-              to="/editor"
-              className="hidden md:flex items-center gap-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm hover:shadow-md"
-            >
-              <Plus size={17} />
-              Create Resume
-            </Link>
-            <Link to="/import-resume">Import Resume</Link>
+            {/* HEADER ACTIONS */}
+
+            <div className="hidden md:flex items-center gap-3">
+              {/* IMPORT RESUME */}
+
+              <Link
+                to="/import-resume"
+                className="flex items-center gap-2 border border-[#E2E8F0] hover:border-[#2563EB] text-[#475569] hover:text-[#2563EB] bg-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+              >
+                <Upload size={17} />
+                Import Resume
+              </Link>
+
+              {/* CREATE RESUME */}
+
+              <Link
+                to="/editor"
+                className="flex items-center gap-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm hover:shadow-md"
+              >
+                <Plus size={17} />
+                Create Resume
+              </Link>
+            </div>
           </div>
         </header>
 
         <div className="p-6 md:p-10 max-w-[1500px] mx-auto">
-          {/* Welcome Banner */}
+          {/* ========================================
+              WELCOME BANNER
+          ======================================== */}
 
           <div className="mb-8 rounded-2xl border border-[#E2E8F0] bg-white p-6 md:p-7 flex flex-col md:flex-row md:items-center justify-between gap-5">
             <div>
@@ -189,7 +216,9 @@ const Dashboard = () => {
             </Link>
           </div>
 
-          {/* Statistics */}
+          {/* ========================================
+              STATISTICS
+          ======================================== */}
 
           <section className="mb-10">
             <div className="flex items-center justify-between mb-4">
@@ -227,12 +256,14 @@ const Dashboard = () => {
             </div>
           </section>
 
-          {/* Quick Actions */}
+          {/* ========================================
+              QUICK ACTIONS
+          ======================================== */}
 
           <section className="mb-10">
             <h2 className="font-semibold text-[#0F172A] mb-4">Quick Actions</h2>
 
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
               {actions.map(({ icon: Icon, label, desc, to }) => (
                 <Link
                   key={label}
@@ -260,7 +291,9 @@ const Dashboard = () => {
             </div>
           </section>
 
-          {/* Recent Resumes */}
+          {/* ========================================
+              RECENT RESUMES
+          ======================================== */}
 
           <section>
             <div className="flex items-center justify-between mb-4">
@@ -290,7 +323,7 @@ const Dashboard = () => {
                       : ""
                   }`}
                 >
-                  {/* Resume icon */}
+                  {/* RESUME ICON */}
 
                   <div
                     className="w-11 h-11 rounded-xl flex items-center justify-center"
@@ -301,7 +334,7 @@ const Dashboard = () => {
                     <FileText size={19} style={{ color }} />
                   </div>
 
-                  {/* Resume details */}
+                  {/* RESUME DETAILS */}
 
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-[#0F172A] text-sm">
@@ -315,7 +348,7 @@ const Dashboard = () => {
                     </div>
                   </div>
 
-                  {/* ATS Score */}
+                  {/* ATS SCORE */}
 
                   <div className="hidden sm:flex items-center gap-3">
                     <div className="text-right">
@@ -331,7 +364,7 @@ const Dashboard = () => {
                     <ATSRing score={ats} color={color} />
                   </div>
 
-                  {/* Actions */}
+                  {/* ACTIONS */}
 
                   <div className="flex items-center gap-2">
                     <Link
@@ -347,13 +380,32 @@ const Dashboard = () => {
                     >
                       Analyze
                     </Link>
+                    <Link
+                      to="/job-match"
+                      className="bg-white border border-gray-100 rounded-2xl p-6 hover:shadow-md transition"
+                    >
+                      <div className="text-3xl mb-4">🎯</div>
+
+                      <h3 className="font-bold text-gray-900">Job Match</h3>
+
+                      <p className="text-sm text-gray-500 mt-2">
+                        Compare your resume with a job description and discover
+                        your match.
+                      </p>
+
+                      <div className="mt-5 text-sm font-semibold text-gray-900">
+                        Match my resume →
+                      </div>
+                    </Link>
                   </div>
                 </div>
               ))}
             </div>
           </section>
 
-          {/* AI Insight */}
+          {/* ========================================
+              AI INSIGHT
+          ======================================== */}
 
           <section className="mt-8">
             <div className="rounded-2xl bg-[#0F172A] p-6 md:p-7 flex flex-col md:flex-row md:items-center gap-5">

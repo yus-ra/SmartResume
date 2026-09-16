@@ -6,6 +6,7 @@ import Dashboard from "../pages/Dashboard/Dashboard";
 import ResumeEditor from "../pages/ResumeEditor/ResumeEditor";
 import ResumeAnalysis from "../pages/ResumeAnalysis/ResumeAnalysis";
 import ImportResume from "../pages/importResume/ImportResume";
+import JobMatch from "../pages/JobMatch/JobMatch";
 
 const AppRoutes = () => {
   return (
@@ -17,6 +18,7 @@ const AppRoutes = () => {
       <Route path="/editor" element={<ResumeEditor />} />
       <Route path="/analysis" element={<ResumeAnalysis />} />
       <Route path="/import-resume" element={<ImportResume />} />
+      <Route path="/job-match" element={<JobMatch />} />
     </Routes>
   );
 };
