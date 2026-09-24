@@ -3,10 +3,10 @@ import {
   LayoutDashboard,
   FileText,
   Sparkles,
+  Target,
   Globe,
   Settings,
   LogOut,
-  ChevronDown,
 } from "lucide-react";
 
 import { LogoIcon } from "./Navbar";
@@ -28,6 +28,11 @@ const navItems = [
     to: "/analysis",
   },
   {
+    icon: Target,
+    label: "Job Match",
+    to: "/job-match",
+  },
+  {
     icon: Globe,
     label: "Portfolio",
     to: "/portfolio",
@@ -39,7 +44,10 @@ const Sidebar = () => {
 
   return (
     <aside className="hidden md:flex flex-col w-60 min-h-screen border-r border-[#E2E8F0] bg-white fixed top-0 left-0 bottom-0 z-40">
-      {/* Logo */}
+      {/* =====================================================
+          LOGO
+      ===================================================== */}
+
       <div className="px-5 pt-6 pb-7">
         <Link
           to="/"
@@ -54,14 +62,27 @@ const Sidebar = () => {
         </Link>
       </div>
 
-      {/* Navigation */}
+      {/* =====================================================
+          NAVIGATION
+      ===================================================== */}
+
       <nav className="flex flex-col gap-1 px-3 flex-1">
         <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8]">
           Workspace
         </p>
 
         {navItems.map(({ icon: Icon, label, to }) => {
-          const active = location.pathname === to;
+          /*
+            Job Match should remain active on both:
+
+            /job-match
+            /job-match/results
+          */
+
+          const active =
+            location.pathname === to ||
+            (to === "/job-match" &&
+              location.pathname.startsWith("/job-match/"));
 
           return (
             <Link
@@ -93,26 +114,51 @@ const Sidebar = () => {
         })}
       </nav>
 
-      {/* Bottom Navigation */}
+      {/* =====================================================
+          SETTINGS
+      ===================================================== */}
+
       <div className="px-3 pb-4">
         <Link
           to="/settings"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A] transition-all"
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+            location.pathname === "/settings"
+              ? "bg-[#EFF6FF] text-[#2563EB]"
+              : "text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A]"
+          }`}
         >
-          <Settings size={18} strokeWidth={1.8} className="text-[#94A3B8]" />
-          Settings
+          <Settings
+            size={18}
+            strokeWidth={location.pathname === "/settings" ? 2.2 : 1.8}
+            className={
+              location.pathname === "/settings"
+                ? "text-[#2563EB]"
+                : "text-[#94A3B8]"
+            }
+          />
+
+          <span className="flex-1">Settings</span>
+
+          {location.pathname === "/settings" && (
+            <div className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+          )}
         </Link>
       </div>
 
-      {/* User Section */}
+      {/* =====================================================
+          USER SECTION
+      ===================================================== */}
+
       <div className="border-t border-[#E2E8F0] p-4">
         <div className="flex items-center gap-3">
           {/* Avatar */}
+
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#2563EB] to-[#14B8A6] flex items-center justify-center text-white font-semibold text-xs shadow-sm">
             JD
           </div>
 
           {/* User Info */}
+
           <div className="flex-1 min-w-0">
             <div className="text-xs font-semibold text-[#0F172A] truncate">
               Jordan Davis
@@ -122,6 +168,7 @@ const Sidebar = () => {
           </div>
 
           {/* Logout */}
+
           <Link
             to="/login"
             className="p-1.5 rounded-lg text-[#94A3B8] hover:text-[#EF4444] hover:bg-[#FEF2F2] transition-all"

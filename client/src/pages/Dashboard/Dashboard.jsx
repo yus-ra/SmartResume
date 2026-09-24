@@ -176,6 +176,23 @@ const Dashboard = () => {
                 <Plus size={17} />
                 Create Resume
               </Link>
+              <Link
+                to="/job-match"
+                className="bg-white border border-gray-100 rounded-2xl p-6 hover:shadow-md transition"
+              >
+                <div className="text-3xl mb-4">🎯</div>
+
+                <h3 className="font-bold text-gray-900">Job Match</h3>
+
+                <p className="text-sm text-gray-500 mt-2">
+                  Compare your resume with a job description and discover your
+                  match.
+                </p>
+
+                <div className="mt-5 text-sm font-semibold text-gray-900">
+                  Match my resume →
+                </div>
+              </Link>
             </div>
           </div>
         </header>
@@ -379,23 +396,6 @@ const Dashboard = () => {
                       className="text-xs font-semibold bg-[#EFF6FF] text-[#2563EB] px-3 py-2 rounded-lg hover:bg-[#DBEAFE] transition-colors"
                     >
                       Analyze
-                    </Link>
-                    <Link
-                      to="/job-match"
-                      className="bg-white border border-gray-100 rounded-2xl p-6 hover:shadow-md transition"
-                    >
-                      <div className="text-3xl mb-4">🎯</div>
-
-                      <h3 className="font-bold text-gray-900">Job Match</h3>
-
-                      <p className="text-sm text-gray-500 mt-2">
-                        Compare your resume with a job description and discover
-                        your match.
-                      </p>
-
-                      <div className="mt-5 text-sm font-semibold text-gray-900">
-                        Match my resume →
-                      </div>
                     </Link>
                   </div>
                 </div>

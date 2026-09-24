@@ -7,6 +7,7 @@ import ResumeEditor from "../pages/ResumeEditor/ResumeEditor";
 import ResumeAnalysis from "../pages/ResumeAnalysis/ResumeAnalysis";
 import ImportResume from "../pages/importResume/ImportResume";
 import JobMatch from "../pages/JobMatch/JobMatch";
+import JobMatchResults from "../pages/JobMatch/JobMatchResults";
 
 const AppRoutes = () => {
   return (
@@ -19,6 +20,7 @@ const AppRoutes = () => {
       <Route path="/analysis" element={<ResumeAnalysis />} />
       <Route path="/import-resume" element={<ImportResume />} />
       <Route path="/job-match" element={<JobMatch />} />
+      <Route path="/job-match/results" element={<JobMatchResults />} />
     </Routes>
   );
 };
