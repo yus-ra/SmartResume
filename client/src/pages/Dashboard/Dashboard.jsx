@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import Sidebar from "../../components/Navbar/Sidebar";
+import { useAuth } from "../../context/AuthContext";
 
 const resumes = [
   {
@@ -103,6 +104,8 @@ function ATSRing({ score, color }) {
 }
 
 const Dashboard = () => {
+  const { user } = useAuth();
+
   const stats = [
     {
       label: "Total Resumes",
@@ -150,7 +153,7 @@ const Dashboard = () => {
               </p>
 
               <h1 className="text-2xl font-bold text-[#0F172A]">
-                Welcome back, Jordan
+                Welcome back, {user?.firstName || "SmartResume User"}
               </h1>
             </div>
 

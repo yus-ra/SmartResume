@@ -1,4 +1,5 @@
-import { Link, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   FileText,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { LogoIcon } from "./Navbar";
+import { useAuth } from "../../context/AuthContext";
 
 const navItems = [
   {
@@ -39,18 +41,54 @@ const navItems = [
   },
 ];
 
+function getInitials(name = "") {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+
+  if (words.length === 0) return "SR";
+
+  if (words.length === 1) {
+    return words[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
+}
+
 const Sidebar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const [userState, setUserState] = useState(() => {
+    const fullName = user?.firstName
+      ? `${user.firstName}${user.surname ? " " + user.surname : ""}`
+      : "SmartResume User";
+    return {
+      fullName,
+      initials: getInitials(fullName),
+    };
+  });
+
+  useEffect(() => {
+    const fullName = user?.firstName
+      ? `${user.firstName}${user.surname ? " " + user.surname : ""}`
+      : "SmartResume User";
+    setUserState({
+      fullName,
+      initials: getInitials(fullName),
+    });
+  }, [user]);
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
 
   return (
     <aside className="hidden md:flex flex-col w-60 min-h-screen border-r border-[#E2E8F0] bg-white fixed top-0 left-0 bottom-0 z-40">
-      {/* =====================================================
-          LOGO
-      ===================================================== */}
-
+      {/* Logo */}
       <div className="px-5 pt-6 pb-7">
         <Link
-          to="/"
+          to="/dashboard"
           className="flex items-center gap-2.5 font-bold text-[#0F172A] text-base"
         >
           <LogoIcon />
@@ -62,23 +100,13 @@ const Sidebar = () => {
         </Link>
       </div>
 
-      {/* =====================================================
-          NAVIGATION
-      ===================================================== */}
-
+      {/* Navigation */}
       <nav className="flex flex-col gap-1 px-3 flex-1">
         <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8]">
           Workspace
         </p>
 
         {navItems.map(({ icon: Icon, label, to }) => {
-          /*
-            Job Match should remain active on both:
-
-            /job-match
-            /job-match/results
-          */
-
           const active =
             location.pathname === to ||
             (to === "/job-match" &&
@@ -114,10 +142,7 @@ const Sidebar = () => {
         })}
       </nav>
 
-      {/* =====================================================
-          SETTINGS
-      ===================================================== */}
-
+      {/* Settings */}
       <div className="px-3 pb-4">
         <Link
           to="/settings"
@@ -145,37 +170,29 @@ const Sidebar = () => {
         </Link>
       </div>
 
-      {/* =====================================================
-          USER SECTION
-      ===================================================== */}
-
+      {/* User */}
       <div className="border-t border-[#E2E8F0] p-4">
         <div className="flex items-center gap-3">
-          {/* Avatar */}
-
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#2563EB] to-[#14B8A6] flex items-center justify-center text-white font-semibold text-xs shadow-sm">
-            JD
+            {userState.initials}
           </div>
-
-          {/* User Info */}
 
           <div className="flex-1 min-w-0">
             <div className="text-xs font-semibold text-[#0F172A] truncate">
-              Jordan Davis
+              {userState.fullName}
             </div>
 
             <div className="text-[10px] text-[#94A3B8]">Free Plan</div>
           </div>
 
-          {/* Logout */}
-
-          <Link
-            to="/login"
+          <button
+            type="button"
+            onClick={handleLogout}
             className="p-1.5 rounded-lg text-[#94A3B8] hover:text-[#EF4444] hover:bg-[#FEF2F2] transition-all"
             title="Logout"
           >
             <LogOut size={16} />
-          </Link>
+          </button>
         </div>
       </div>
     </aside>

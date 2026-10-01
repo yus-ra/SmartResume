@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import App from "../App";
 import Register from "../pages/Register/Register";
 import Login from "../pages/Login/Login";
@@ -8,6 +8,8 @@ import ResumeAnalysis from "../pages/ResumeAnalysis/ResumeAnalysis";
 import ImportResume from "../pages/importResume/ImportResume";
 import JobMatch from "../pages/JobMatch/JobMatch";
 import JobMatchResults from "../pages/JobMatch/JobMatchResults";
+import Portfolio from "../pages/Portfolio/Portfolio";
+import ProtectedRoute from "./ProtectedRoute";
 
 const AppRoutes = () => {
   return (
@@ -15,12 +17,65 @@ const AppRoutes = () => {
       <Route path="/" element={<App />} />
       <Route path="/register" element={<Register />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/dashboard" element={<Dashboard />} />
-      <Route path="/editor" element={<ResumeEditor />} />
-      <Route path="/analysis" element={<ResumeAnalysis />} />
-      <Route path="/import-resume" element={<ImportResume />} />
-      <Route path="/job-match" element={<JobMatch />} />
-      <Route path="/job-match/results" element={<JobMatchResults />} />
+
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/editor"
+        element={
+          <ProtectedRoute>
+            <ResumeEditor />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/analysis"
+        element={
+          <ProtectedRoute>
+            <ResumeAnalysis />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/import-resume"
+        element={
+          <ProtectedRoute>
+            <ImportResume />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/job-match"
+        element={
+          <ProtectedRoute>
+            <JobMatch />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/job-match/results"
+        element={
+          <ProtectedRoute>
+            <JobMatchResults />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/portfolio"
+        element={
+          <ProtectedRoute>
+            <Portfolio />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };

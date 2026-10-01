@@ -1,10 +1,14 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LogoIcon } from "../../components/Navbar/Navbar";
+import { useAuth } from "../../context/AuthContext";
+
 const Register = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [form, setForm] = useState({
-    name: "",
+    firstName: "",
+    surname: "",
     email: "",
     password: "",
     confirm: "",
@@ -31,7 +35,7 @@ const Register = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.password) {
+    if (!form.firstName || !form.email || !form.password) {
       setError("Please fill in all fields.");
       return;
     }
@@ -39,9 +43,17 @@ const Register = () => {
       setError("Passwords do not match.");
       return;
     }
+
     setError("");
     setLoading(true);
+
     setTimeout(() => {
+      login({
+        firstName: form.firstName,
+        surname: form.surname,
+        email: form.email,
+      });
+
       setLoading(false);
       navigate("/dashboard");
     }, 1200);
@@ -159,17 +171,35 @@ const Register = () => {
             )}
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-[#0F172A] mb-1.5 uppercase tracking-wide">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="Jordan Davis"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full border border-[#E2E8F0] rounded-xl px-4 py-3 text-sm text-[#0F172A] placeholder:text-[#94A3B8] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10 transition-all"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#0F172A] mb-1.5 uppercase tracking-wide">
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Jordan"
+                    value={form.firstName}
+                    onChange={(e) =>
+                      setForm({ ...form, firstName: e.target.value })
+                    }
+                    className="w-full border border-[#E2E8F0] rounded-xl px-4 py-3 text-sm text-[#0F172A] placeholder:text-[#94A3B8] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#0F172A] mb-1.5 uppercase tracking-wide">
+                    Surname
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Davis"
+                    value={form.surname}
+                    onChange={(e) =>
+                      setForm({ ...form, surname: e.target.value })
+                    }
+                    className="w-full border border-[#E2E8F0] rounded-xl px-4 py-3 text-sm text-[#0F172A] placeholder:text-[#94A3B8] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10 transition-all"
+                  />
+                </div>
               </div>
 
               <div>
@@ -266,32 +296,20 @@ const Register = () => {
                     Creating account…
                   </>
                 ) : (
-                  "Create Free Account →"
+                  "Create Account →"
                 )}
               </button>
 
-              <p className="text-center text-[10px] text-[#94A3B8] leading-relaxed">
-                By registering, you agree to our{" "}
-                <a href="#" className="text-[#2563EB] hover:underline">
-                  Terms of Service
-                </a>{" "}
-                and{" "}
-                <a href="#" className="text-[#2563EB] hover:underline">
-                  Privacy Policy
-                </a>
-                .
+              <p className="text-center text-sm text-[#94A3B8]">
+                Already have an account?{" "}
+                <Link
+                  to="/login"
+                  className="text-[#2563EB] font-semibold hover:underline"
+                >
+                  Login
+                </Link>
               </p>
             </form>
-
-            <p className="text-center text-sm text-[#94A3B8] mt-5">
-              Already have an account?{" "}
-              <Link
-                to="/login"
-                className="text-[#2563EB] font-semibold hover:underline"
-              >
-                Login
-              </Link>
-            </p>
           </div>
         </div>
       </div>

@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LogoIcon } from "../../components/Navbar/Navbar";
+import { useAuth } from "../../context/AuthContext";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -15,9 +17,22 @@ const Login = () => {
       setError("Please fill in all fields.");
       return;
     }
+
     setError("");
     setLoading(true);
+
     setTimeout(() => {
+      const emailUsername = form.email.split("@")[0] || "SmartResume User";
+      const firstName = emailUsername.split(".")[0];
+      const capitalizedFirstName =
+        firstName.charAt(0).toUpperCase() + firstName.slice(1);
+
+      login({
+        firstName: capitalizedFirstName,
+        surname: "",
+        email: form.email,
+      });
+
       setLoading(false);
       navigate("/dashboard");
     }, 1200);
