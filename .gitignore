@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
 # Kilo agent directory (config, rules and managed worktrees)
 .kilo/
 
