@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Navbar/Sidebar";
 import {
+  getResumeScope,
   loadResume,
   saveResume,
   createId,
@@ -34,6 +35,32 @@ const templates = [
 
 const sections = ["Contact", "Summary", "Experience", "Education", "Skills"];
 
+/* ========================================
+   TEMPLATE PREFERENCE STORAGE
+
+   The chosen template is an account preference, not a device
+   setting. It is scoped the same way resume data is, so User B
+   never inherits User A's template and B's change never
+   overwrites A's:
+
+     anonymous      activeTemplate
+     account <id>   activeTemplate:u<id>
+
+   This component is the sole owner of that key, and the scope is
+   already resolved by the time the editor mounts, because
+   ProtectedRoute does not render it until the session is known.
+   ======================================== */
+
+const TEMPLATE_STORAGE_KEY = "activeTemplate";
+
+const getTemplateStorageKey = () => {
+  const scope = getResumeScope();
+
+  return scope === null
+    ? TEMPLATE_STORAGE_KEY
+    : `${TEMPLATE_STORAGE_KEY}:u${scope}`;
+};
+
 // ========================================
 // COMPONENT
 // ========================================
@@ -47,7 +74,9 @@ const ResumeEditor = () => {
   // ========================================
 
   const [activeTemplate, setActiveTemplate] = useState(() => {
-    const savedTemplate = localStorage.getItem("activeTemplate");
+    const savedTemplate = localStorage.getItem(
+      getTemplateStorageKey(),
+    );
 
     return savedTemplate ? Number(savedTemplate) : 1;
   });
@@ -129,7 +158,10 @@ const ResumeEditor = () => {
     setSaveError("");
     setSaved(true);
 
-    localStorage.setItem("activeTemplate", activeTemplate.toString());
+    localStorage.setItem(
+      getTemplateStorageKey(),
+      activeTemplate.toString(),
+    );
 
     setTimeout(() => {
       setSaved(false);
@@ -374,7 +406,10 @@ const ResumeEditor = () => {
     void syncResumeToServer(result.resume);
 
     setSaveError("");
-    localStorage.setItem("activeTemplate", activeTemplate.toString());
+    localStorage.setItem(
+      getTemplateStorageKey(),
+      activeTemplate.toString(),
+    );
 
     navigate("/analysis");
   };

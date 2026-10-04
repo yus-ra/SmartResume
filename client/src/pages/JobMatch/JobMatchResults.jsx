@@ -1,37 +1,21 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import Sidebar from "../../components/Navbar/Sidebar";
 
+/*
+ * The results page.
+ *
+ * There is intentionally no localStorage read here. The job-description
+ * storage key was read by this page but never written anywhere in the
+ * application: JobMatch keeps the job description in React state, so the key
+ * could never be populated and this page could never render real results.
+ * Reading it also meant a value left behind by an older build would be shown
+ * to whoever signed in next, regardless of whose job it described.
+ *
+ * Persisted results are a separate piece of work. Until then this page renders
+ * its existing placeholder, which is exactly what it displayed before any data
+ * existed.
+ */
 const JobMatchResults = () => {
-  const navigate = useNavigate();
-
-  const [job, setJob] = useState(null);
-
-  useEffect(() => {
-    const storedJob = localStorage.getItem("jobDescription");
-
-    if (!storedJob) {
-      navigate("/job-match");
-      return;
-    }
-
-    try {
-      setJob(JSON.parse(storedJob));
-    } catch (error) {
-      console.error("Could not read job description:", error);
-
-      navigate("/job-match");
-    }
-  }, [navigate]);
-
-  if (!job) {
-    return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
-        <div className="text-gray-500">Loading job analysis...</div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
       <Sidebar />
@@ -52,12 +36,8 @@ const JobMatchResults = () => {
               </p>
 
               <h1 className="text-3xl font-bold text-gray-900">
-                {job.title || "Job Match Results"}
+                Job Match Results
               </h1>
-
-              {job.company && (
-                <p className="text-gray-500 mt-2">{job.company}</p>
-              )}
             </div>
           </div>
         </header>
@@ -101,19 +81,18 @@ const JobMatchResults = () => {
             </div>
 
             {/* =================================================
-                JOB PREVIEW
+                RUN THE MATCH
             ================================================= */}
 
             <div className="mt-6 bg-white border border-gray-100 rounded-3xl p-8">
               <h2 className="text-lg font-bold text-gray-900 mb-4">
-                Job Description
+                No analysis stored
               </h2>
 
-              <div className="bg-gray-50 rounded-2xl p-6">
-                <p className="text-sm text-gray-600 whitespace-pre-wrap leading-7">
-                  {job.description}
-                </p>
-              </div>
+              <p className="text-sm text-gray-600 leading-7">
+                Results are not saved between visits yet. Go to Job Match to
+                analyse a job description against your resume.
+              </p>
             </div>
           </div>
         </main>
