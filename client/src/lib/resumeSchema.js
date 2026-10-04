@@ -230,6 +230,16 @@ export const setResumeScope = (userId) => {
 
   activeUserId = normalizeScopeId(userId);
 
+  if (previous !== activeUserId) {
+    /*
+     * Sync state is in-memory and would otherwise survive an account change,
+     * letting a newly signed-in user see the previous account's "last synced"
+     * time and status. Reset it whenever the scope actually changes.
+     */
+    resumeOriginScope = ANONYMOUS_SCOPE;
+    resetResumeSyncState();
+  }
+
   if (isAuthenticatedResumeScope()) {
     runLegacyMigrationIfNeeded();
   }
