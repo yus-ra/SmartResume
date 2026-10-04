@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Kilo agent directory (config, rules and managed worktrees)
+.kilo/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
