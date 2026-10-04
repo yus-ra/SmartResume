@@ -5,7 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 
 const Register = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { register } = useAuth();
   const [form, setForm] = useState({
     firstName: "",
     surname: "",
@@ -33,7 +33,7 @@ const Register = () => {
     strength
   ];
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.firstName || !form.email || !form.password) {
       setError("Please fill in all fields.");
@@ -47,16 +47,25 @@ const Register = () => {
     setError("");
     setLoading(true);
 
-    setTimeout(() => {
-      login({
-        firstName: form.firstName,
-        surname: form.surname,
-        email: form.email,
-      });
+    const result = await register({
+      firstName: form.firstName.trim(),
+      surname: form.surname.trim(),
+      email: form.email.trim(),
+      password: form.password,
+    });
 
+    if (!result.ok) {
       setLoading(false);
-      navigate("/dashboard");
-    }, 1200);
+      setError(
+        result.fields?.email ||
+          result.fields?.password ||
+          result.message ||
+          "We couldn't create your account. Please try again.",
+      );
+      return;
+    }
+
+    navigate("/dashboard");
   };
 
   return (

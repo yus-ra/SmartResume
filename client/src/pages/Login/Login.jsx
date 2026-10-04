@@ -11,7 +11,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.email || !form.password) {
       setError("Please fill in all fields.");
@@ -21,21 +21,23 @@ const Login = () => {
     setError("");
     setLoading(true);
 
-    setTimeout(() => {
-      const emailUsername = form.email.split("@")[0] || "SmartResume User";
-      const firstName = emailUsername.split(".")[0];
-      const capitalizedFirstName =
-        firstName.charAt(0).toUpperCase() + firstName.slice(1);
+    // Credentials are verified by the server; nothing is derived locally.
+    const result = await login({
+      email: form.email.trim(),
+      password: form.password,
+    });
 
-      login({
-        firstName: capitalizedFirstName,
-        surname: "",
-        email: form.email,
-      });
-
+    if (!result.ok) {
       setLoading(false);
-      navigate("/dashboard");
-    }, 1200);
+      setError(
+        result.fields?.password ||
+          result.message ||
+          "We couldn't sign you in. Please try again.",
+      );
+      return;
+    }
+
+    navigate("/dashboard");
   };
 
   return (

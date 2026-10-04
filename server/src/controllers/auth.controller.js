@@ -7,6 +7,7 @@ import {
   sessionCookieOptions,
 } from "../config/env.js";
 import { validateLogin, validateRegistration } from "../lib/validation.js";
+import { ensureDatabase } from "../middleware/requireDatabase.js";
 
 /*
  * Auth controller.
@@ -40,6 +41,12 @@ export async function register(req, res) {
       message: "Please correct the highlighted fields.",
       fields: errors,
     });
+  }
+
+  // Validation first, then the database check: a malformed request is a 400
+  // regardless of whether MongoDB happens to be reachable.
+  if (!ensureDatabase(res)) {
+    return;
   }
 
   const existing = await User.findOne({ email: data.email });
@@ -79,6 +86,10 @@ export async function login(req, res) {
       message: "Please correct the highlighted fields.",
       fields: errors,
     });
+  }
+
+  if (!ensureDatabase(res)) {
+    return;
   }
 
   // passwordHash is select:false, so it must be requested explicitly.

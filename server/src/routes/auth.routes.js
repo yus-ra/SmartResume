@@ -12,15 +12,19 @@ import { requireDatabase } from "../middleware/requireDatabase.js";
 const router = Router();
 
 /*
- * Database-backed routes are gated per-route by `requireDatabase` so they
- * answer 503 while the connection is down.
+ * Register and login are NOT gated here: each validates its payload first and
+ * only then reports an unavailable database via `ensureDatabase`, so a
+ * malformed request is answered 400 even while MongoDB is down.
+ *
+ * `/me` is gated, because deciding whether a session is valid genuinely
+ * requires the database.
  *
  * Logout is deliberately NOT gated: clearing a cookie is purely a client-side
  * concern, and a user must never be stuck in a signed-in state because the
  * server lost its database.
  */
-router.post("/register", requireDatabase, register);
-router.post("/login", requireDatabase, login);
+router.post("/register", register);
+router.post("/login", login);
 
 router.post("/logout", logout);
 
