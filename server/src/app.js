@@ -6,6 +6,7 @@ import { env } from "./config/env.js";
 import { getConnectionState } from "./config/db.js";
 import { attachUser } from "./middleware/auth.js";
 import authRoutes from "./routes/auth.routes.js";
+import resumeRoutes from "./routes/resume.routes.js";
 
 export function createApp() {
   const app = express();
@@ -37,6 +38,7 @@ export function createApp() {
   });
 
   app.use("/api/auth", authRoutes);
+  app.use("/api/resume", resumeRoutes);
 
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "not_found", message: "No such endpoint." });
