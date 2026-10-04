@@ -5,6 +5,7 @@ import {
   normalizeResume,
   saveResume,
   createId,
+  syncResumeToServer,
 } from "../../lib/resumeSchema";
 import * as pdfjsLib from "pdfjs-dist";
 import mammoth from "mammoth";
@@ -1454,6 +1455,10 @@ const ImportResume = () => {
             "We imported your resume, but we couldn't save it. Please try again.",
         );
       }
+
+      // The resume is durable locally. Mirror it in the background so an import
+      // on this device reaches the account, without delaying the redirect.
+      void syncResumeToServer(saveResult.resume);
 
       // ========================================
       // SUCCESS

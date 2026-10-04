@@ -131,3 +131,31 @@ export function logout() {
 }
 
 export { API_BASE_URL, REQUEST_TIMEOUT_MS };
+
+/* ------------------------------------------------------------------ */
+/* Resume endpoints                                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Fetch the account's single resume.
+ *
+ * 200 -> `{ resume, schemaVersion, updatedAt }`
+ * 404 -> `{ resume: null }` meaning nothing has been saved server-side yet.
+ *        This is NOT the same as an empty resume, so callers must not
+ *        overwrite local data on a 404.
+ */
+export function getResume() {
+  return request("/api/resume");
+}
+
+/**
+ * Create or replace the account's single resume.
+ * `resume` is sent verbatim; the canonical shape is owned by
+ * lib/resumeSchema.js, not by this layer.
+ */
+export function putResume(resume, schemaVersion) {
+  return request("/api/resume", {
+    method: "PUT",
+    body: { schemaVersion, resume },
+  });
+}

@@ -1,7 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Navbar/Sidebar";
-import { loadResume, saveResume, createId } from "../../lib/resumeSchema";
+import {
+  loadResume,
+  saveResume,
+  createId,
+  syncResumeToServer,
+} from "../../lib/resumeSchema";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -115,6 +120,11 @@ const ResumeEditor = () => {
     // Adopt the persisted canonical object so in-memory state and stored
     // state stay identical, including the document id assigned on first save.
     setResume(result.resume);
+
+    // Local storage is already durable at this point. Mirroring to the server
+    // is a background operation and must never delay or fail the save, so it
+    // is intentionally not awaited.
+    void syncResumeToServer(result.resume);
 
     setSaveError("");
     setSaved(true);
@@ -359,6 +369,9 @@ const ResumeEditor = () => {
     }
 
     setResume(result.resume);
+
+    // Mirrored before navigating, exactly as for a normal save.
+    void syncResumeToServer(result.resume);
 
     setSaveError("");
     localStorage.setItem("activeTemplate", activeTemplate.toString());

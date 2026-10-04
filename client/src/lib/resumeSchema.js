@@ -6,7 +6,11 @@
  * ============================================================================
  *
  * This module is the only place in the frontend where the SHAPE of a resume is
- * defined, coerced, normalized or persisted.
+ * defined, coerced, normalized or persisted. It also owns cloud sync, so no
+ * other module performs resume network requests.
+ *
+ * It deliberately imports no React: components observe sync state through
+ * subscribeToResumeSync() so this file stays framework agnostic.
  *
  * Rules for consumers:
  *   - Do NOT define your own resume normalizer or defaults.
@@ -129,10 +133,27 @@
  *   - It does not manage React state or hold a store.
  */
 
+// Explicit extension so this module also loads under plain Node (ESM), which
+// keeps it testable outside the Vite bundler.
+import { getResume, putResume } from "./api.js";
+
 export const RESUME_SCHEMA_VERSION = 1;
 
 /** Canonical storage key. Single source of truth. */
 export const RESUME_STORAGE_KEY = "resumeData";
+
+/**
+ * When this device last saved the resume, as an epoch milliseconds string.
+ *
+ * This is the local half of the last-write-wins tie-breaker. It exists so a
+ * cloud copy can never silently overwrite newer work that was done offline,
+ * because `updatedAt` is server time and the canonical resume schema carries
+ * no timestamp of its own.
+ *
+ * It is resume metadata, not resume content: the resume shape is unaffected,
+ * and `loadResume()` still returns exactly the same canonical object.
+ */
+export const RESUME_LOCAL_TIMESTAMP_KEY = "smartresume_local_updated_at";
 
 /**
  * Legacy keys written as byte-identical mirrors of the canonical payload.
@@ -676,7 +697,331 @@ export const saveResume = (resume) => {
     }
   }
 
+  // Record when this device last saved, so a later cloud pull can tell
+  // whether the server copy or this copy is newer.
+  writeLocalUpdatedAt(Date.now());
+
   return { ok: true, resume: canonical, error: null };
+};
+
+/* ======================================================================== *
+ * Cloud sync
+ *
+ * Local storage is the immediate source of truth. Every UI surface reads from
+ * it, and the network is only ever a background mirror:
+ *
+ *   save local first  ->  mirror to the server, fire and forget
+ *   sign in           ->  pull the server copy down in the background
+ *
+ * Because of that ordering, a save NEVER fails because the network failed. A
+ * failed mirror is reported through sync state and retried by the next save.
+ *
+ * Conflict policy: last write wins. The server copy replaces the local copy on
+ * a successful pull. There is deliberately no merge UI.
+ *
+ * This module stays framework agnostic — it imports no React — so components
+ * observe sync state through subscribeToResumeSync() instead.
+ * ======================================================================== */
+
+const SYNC_STATUS_IDLE = "idle";
+const SYNC_STATUS_SYNCING = "syncing";
+const SYNC_STATUS_SYNCED = "synced";
+const SYNC_STATUS_OFFLINE = "offline";
+const SYNC_STATUS_ERROR = "error";
+
+let syncState = {
+  status: SYNC_STATUS_IDLE,
+  lastSyncedAt: null,
+  lastError: null,
+};
+
+const syncListeners = new Set();
+
+/** Current sync state. Returns a copy so callers cannot mutate it. */
+export const getResumeSyncState = () => ({ ...syncState });
+
+/**
+ * Observe sync state changes.
+ * Returns an unsubscribe function.
+ */
+export const subscribeToResumeSync = (listener) => {
+  if (typeof listener !== "function") {
+    return () => {};
+  }
+
+  syncListeners.add(listener);
+
+  return () => {
+    syncListeners.delete(listener);
+  };
+};
+
+const setSyncState = (patch) => {
+  syncState = { ...syncState, ...patch };
+
+  for (const listener of syncListeners) {
+    try {
+      listener(getResumeSyncState());
+    } catch {
+      // A misbehaving subscriber must not break sync for everyone else.
+    }
+  }
+};
+
+const nowIso = () => new Date().toISOString();
+
+/* ------------------------------------------------------------------ *
+ * Local timestamp helpers (last-write-wins tie-breaker)
+ * ------------------------------------------------------------------ */
+
+/** Epoch ms of the last local save, or 0 when there is none. */
+const readLocalUpdatedAt = () => {
+  const storage = getStorage();
+
+  if (!storage) return 0;
+
+  try {
+    const value = Number(storage.getItem(RESUME_LOCAL_TIMESTAMP_KEY));
+
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const writeLocalUpdatedAt = (timestamp) => {
+  const storage = getStorage();
+
+  if (!storage) return;
+
+  try {
+    storage.setItem(RESUME_LOCAL_TIMESTAMP_KEY, String(timestamp));
+  } catch {
+    // Losing the timestamp only weakens the offline guard; it must never
+    // prevent the resume itself from being saved.
+  }
+};
+
+/** Epoch ms for a server ISO timestamp, or 0 when absent/unparseable. */
+const serverUpdatedAtMs = (iso) => {
+  if (!iso) return 0;
+
+  const parsed = new Date(iso).getTime();
+
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+/**
+ * Pull the server copy down and store it locally.
+ *
+ * Called after a session is confirmed. Never throws.
+ *
+ * Resolution, so a stale cloud copy can never silently destroy newer offline
+ * work:
+ *   local resume empty        -> pull; there is nothing to protect
+ *   local timestamp newer     -> keep local, push it up instead of pulling
+ *   server newer / no stamp   -> pull and overwrite
+ *
+ * Result reasons:
+ *   "pulled"           server copy was adopted
+ *   "local_newer"      local work was kept and pushed instead
+ *   "no_server_resume" server has nothing; local data deliberately untouched
+ *   "unauthenticated"  no valid session; nothing touched
+ *   "offline"          server unreachable/unhealthy; nothing touched
+ *   "error"            unexpected failure; nothing touched
+ */
+export const syncResumeFromServer = async () => {
+  setSyncState({ status: SYNC_STATUS_SYNCING, lastError: null });
+
+  let result;
+
+  try {
+    result = await getResume();
+  } catch (error) {
+    // api.js is contracted never to throw, so this is belt and braces.
+    setSyncState({
+      status: SYNC_STATUS_OFFLINE,
+      lastError: error?.message || "Could not reach the server.",
+    });
+
+    return { ok: false, reason: "offline", changed: false };
+  }
+
+  if (result.ok && result.data?.resume) {
+    const incoming = normalizeResume(result.data.resume);
+    const current = loadResume();
+
+    // Nothing on this device worth protecting, so adopt the cloud copy.
+    // This is what restores a resume onto a fresh browser.
+    if (isEmptyResume(current)) {
+      const saved = saveResume(incoming);
+
+      if (!saved.ok) {
+        setSyncState({
+          status: SYNC_STATUS_ERROR,
+          lastError: saved.error?.message || "Could not write the pulled resume locally.",
+        });
+
+        return { ok: false, reason: "error", changed: false };
+      }
+
+      // Align the local stamp with the server so the next pull does not
+      // mistake this just-restored copy for newer offline work.
+      writeLocalUpdatedAt(serverUpdatedAtMs(result.data.updatedAt) || Date.now());
+
+      setSyncState({
+        status: SYNC_STATUS_SYNCED,
+        lastSyncedAt: nowIso(),
+        lastError: null,
+      });
+
+      return { ok: true, reason: "pulled", changed: true, resolution: "local_empty" };
+    }
+
+    const localUpdatedAt = readLocalUpdatedAt();
+    const serverAt = serverUpdatedAtMs(result.data.updatedAt);
+
+    /*
+     * The local copy was changed more recently than the server copy, so the
+     * server is stale. Keep the local work and push it instead of overwriting.
+     */
+    if (localUpdatedAt > 0 && localUpdatedAt > serverAt) {
+      const pushed = await syncResumeToServer(current);
+
+      return {
+        ok: true,
+        reason: "local_newer",
+        changed: false,
+        resolution: "kept_local",
+        pushed: pushed.ok,
+        localUpdatedAt,
+        serverUpdatedAt: serverAt,
+      };
+    }
+
+    const changed = JSON.stringify(current) !== JSON.stringify(incoming);
+
+    // Written through saveResume() so resumeData and its cvData mirror stay
+    // consistent, and so the normalizer runs exactly once per pull.
+    const saved = saveResume(incoming);
+
+    if (!saved.ok) {
+      setSyncState({
+        status: SYNC_STATUS_ERROR,
+        lastError: saved.error?.message || "Could not write the pulled resume locally.",
+      });
+
+      return { ok: false, reason: "error", changed: false };
+    }
+
+    // This copy now matches the server, so record the server's own timestamp
+    // rather than the current time.
+    writeLocalUpdatedAt(serverAt || Date.now());
+
+    setSyncState({
+      status: SYNC_STATUS_SYNCED,
+      lastSyncedAt: nowIso(),
+      lastError: null,
+    });
+
+    return {
+      ok: true,
+      reason: "pulled",
+      changed,
+      resolution: localUpdatedAt > 0 ? "server_newer" : "no_local_timestamp",
+    };
+  }
+
+  // 404 means the account has no server-side resume yet. Local data, if any,
+  // must NOT be replaced with nothing.
+  if (result.status === 404) {
+    setSyncState({
+      status: SYNC_STATUS_SYNCED,
+      lastSyncedAt: nowIso(),
+      lastError: null,
+    });
+
+    return { ok: true, reason: "no_server_resume", changed: false };
+  }
+
+  if (result.status === 401) {
+    setSyncState({
+      status: SYNC_STATUS_ERROR,
+      lastError: "Your session has expired. Sign in again to sync.",
+    });
+
+    return { ok: false, reason: "unauthenticated", changed: false };
+  }
+
+  // Unreachable, database down, or any other server-side failure. The local
+  // copy remains authoritative and the user keeps working offline.
+  setSyncState({
+    status: SYNC_STATUS_OFFLINE,
+    lastError: result.message || "The server could not be reached.",
+  });
+
+  return { ok: false, reason: "offline", changed: false };
+};
+
+/**
+ * Mirror a resume to the server.
+ *
+ * Called after a successful local save, in the background. Never throws and
+ * never blocks: the caller has already persisted locally.
+ */
+export const syncResumeToServer = async (resume) => {
+  const canonical = normalizeResume(resume);
+
+  setSyncState({ status: SYNC_STATUS_SYNCING, lastError: null });
+
+  try {
+    const result = await putResume(
+      canonical,
+      canonical.schemaVersion ?? RESUME_SCHEMA_VERSION,
+    );
+
+    if (result.ok) {
+      setSyncState({
+        status: SYNC_STATUS_SYNCED,
+        lastSyncedAt: nowIso(),
+        lastError: null,
+      });
+
+      return { ok: true };
+    }
+
+    if (result.status === 401) {
+      setSyncState({
+        status: SYNC_STATUS_ERROR,
+        lastError: "Sign in again to sync this resume.",
+      });
+
+      return { ok: false, reason: "unauthenticated", message: result.message };
+    }
+
+    setSyncState({
+      status: SYNC_STATUS_OFFLINE,
+      lastError: result.message || "The server could not be reached.",
+    });
+
+    return { ok: false, reason: "offline", message: result.message };
+  } catch (error) {
+    setSyncState({
+      status: SYNC_STATUS_OFFLINE,
+      lastError: error?.message || "Could not reach the server.",
+    });
+
+    return { ok: false, reason: "offline" };
+  }
+};
+
+/** Reset sync state, e.g. on logout. Local resume data is not touched. */
+export const resetResumeSyncState = () => {
+  setSyncState({
+    status: SYNC_STATUS_IDLE,
+    lastSyncedAt: null,
+    lastError: null,
+  });
 };
 
 /* ======================================================================== *

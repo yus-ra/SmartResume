@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FileText,
@@ -13,11 +13,20 @@ import {
   ArrowUpRight,
   ChevronRight,
   Upload,
+  Cloud,
+  CloudOff,
+  RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 
 import Sidebar from "../../components/Navbar/Sidebar";
 import { useAuth } from "../../context/AuthContext";
-import { loadResume, isEmptyResume } from "../../lib/resumeSchema";
+import {
+  getResumeSyncState,
+  loadResume,
+  isEmptyResume,
+  subscribeToResumeSync,
+} from "../../lib/resumeSchema";
 
 /* =========================================================
    QUICK ACTIONS
@@ -129,6 +138,83 @@ const FIELD_LABELS = {
   skills: "skills",
 };
 
+/* =========================================================
+   SYNC STATUS
+
+   Every state is reported truthfully. In particular an offline
+   resume is never described as backed up: the local copy is the
+   only copy we can honestly promise.
+   ========================================================= */
+
+const formatSyncedAt = (iso) => {
+  if (!iso) return "";
+
+  const then = new Date(iso).getTime();
+
+  if (Number.isNaN(then)) return "";
+
+  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} hr ago`;
+
+  const days = Math.floor(seconds / 86400);
+
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+};
+
+const describeSync = (sync) => {
+  switch (sync.status) {
+    case "syncing":
+      return {
+        icon: RefreshCw,
+        tone: "text-[#2563EB]",
+        spin: true,
+        label: "Syncing…",
+        detail: "Saving a copy to your account.",
+      };
+
+    case "synced":
+      return {
+        icon: Cloud,
+        tone: "text-[#22C55E]",
+        spin: false,
+        label: "Saved to cloud",
+        detail: sync.lastSyncedAt
+          ? `Last synced ${formatSyncedAt(sync.lastSyncedAt)}.`
+          : "Synced with your account.",
+      };
+
+    case "offline":
+      return {
+        icon: CloudOff,
+        tone: "text-[#F59E0B]",
+        spin: false,
+        label: "Offline — saved on this device",
+        detail: sync.lastError || "The server could not be reached.",
+      };
+
+    case "error":
+      return {
+        icon: AlertCircle,
+        tone: "text-[#EF4444]",
+        spin: false,
+        label: "Not synced",
+        detail: sync.lastError || "This resume has not reached your account.",
+      };
+
+    default:
+      return {
+        icon: Cloud,
+        tone: "text-[#94A3B8]",
+        spin: false,
+        label: "Not synced yet",
+        detail: "Save your resume to back it up to your account.",
+      };
+  }
+};
+
 const Dashboard = () => {
   const { user } = useAuth();
 
@@ -149,6 +235,20 @@ const Dashboard = () => {
   });
 
   const hasResume = Boolean(resume);
+
+  /* =======================================================
+     SYNC STATE
+
+     Observed through the schema module's subscription so
+     this page holds no sync state of its own.
+  ======================================================= */
+
+  const [sync, setSync] = useState(() => getResumeSyncState());
+
+  useEffect(() => subscribeToResumeSync(setSync), []);
+
+  const syncInfo = describeSync(sync);
+  const SyncIcon = syncInfo.icon;
 
   const profileCompletion = getProfileCompletion(resume);
   const incompleteFields = hasResume ? getIncompleteFields(resume) : [];
@@ -410,6 +510,25 @@ const Dashboard = () => {
 
                     <p className="text-xs text-[#94A3B8] mt-1 truncate">
                       {resume.contact?.name?.trim() || "No name added"}
+                    </p>
+
+                    {/* SYNC STATUS
+                        Reflects real cloud-sync state. Never claims a backup
+                        that has not happened. */}
+
+                    <p
+                      className={`text-[11px] mt-1.5 flex items-center gap-1.5 ${syncInfo.tone}`}
+                    >
+                      <SyncIcon
+                        size={12}
+                        className={syncInfo.spin ? "animate-spin" : ""}
+                      />
+
+                      <span className="font-medium">{syncInfo.label}</span>
+                    </p>
+
+                    <p className="text-[11px] text-[#94A3B8] mt-0.5 truncate">
+                      {syncInfo.detail}
                     </p>
                   </div>
 

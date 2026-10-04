@@ -15,6 +15,11 @@ import {
   register as registerRequest,
 } from "../lib/api";
 
+import {
+  resetResumeSyncState,
+  syncResumeFromServer,
+} from "../lib/resumeSchema";
+
 /*
  * Authentication state.
  *
@@ -146,6 +151,12 @@ export const AuthProvider = ({ children }) => {
       if (result.ok && result.data?.user) {
         applyUser(result.data.user);
         setStatus("authenticated");
+
+        // Pull the account's resume down to this device in the background.
+        // This is deliberately NOT awaited: the UI already renders from local
+        // storage, so there is nothing to wait for and no spinner to show.
+        void syncResumeFromServer();
+
         return;
       }
 
@@ -177,6 +188,11 @@ export const AuthProvider = ({ children }) => {
       if (result.ok && result.data?.user) {
         applyUser(result.data.user);
         setStatus("authenticated");
+
+        // Pull the account's resume down to this device. A returning user may
+        // have saved from another device since the last visit. Deliberately not
+        // awaited: the UI already renders from local storage.
+        void syncResumeFromServer();
       }
 
       return result;
@@ -191,6 +207,9 @@ export const AuthProvider = ({ children }) => {
       if (result.ok && result.data?.user) {
         applyUser(result.data.user);
         setStatus("authenticated");
+
+        // A brand new account has nothing on the server, so a pull would be a
+        // no-op. The next editor save mirrors automatically.
       }
 
       return result;
@@ -208,6 +227,10 @@ export const AuthProvider = ({ children }) => {
     clearCachedUser();
     setUser(null);
     setStatus("unauthenticated");
+
+    // Sync state is per session. The local resume copy is intentionally left
+    // alone: signing out must never discard a resume.
+    resetResumeSyncState();
 
     await logoutRequest();
 
