@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { loadResume, isEmptyResume } from "../../lib/resumeSchema";
 import {
   Target,
   FileText,
@@ -287,50 +288,8 @@ const JOB_TITLE_GROUPS = {
 };
 
 /* =========================================================
-   RESUME NORMALIZATION
-========================================================= */
-
-function normalizeResume(data) {
-  const resume = data || {};
-
-  return {
-    contact: {
-      name: resume.contact?.name || "",
-      title: resume.contact?.title || "",
-      email: resume.contact?.email || "",
-      phone: resume.contact?.phone || "",
-      location: resume.contact?.location || "",
-      linkedin: resume.contact?.linkedin || "",
-    },
-
-    summary: resume.summary || "",
-
-    experience: Array.isArray(resume.experience)
-      ? resume.experience.map((item) => ({
-          role: item?.role || "",
-          company: item?.company || "",
-          period: item?.period || "",
-          bullets: Array.isArray(item?.bullets)
-            ? item.bullets.filter(Boolean)
-            : [],
-        }))
-      : [],
-
-    education: Array.isArray(resume.education)
-      ? resume.education.map((item) => ({
-          degree: item?.degree || "",
-          school: item?.school || "",
-          period: item?.period || "",
-        }))
-      : [],
-
-    skills: Array.isArray(resume.skills) ? resume.skills.filter(Boolean) : [],
-  };
-}
-
-/* =========================================================
    BUILD RESUME SEARCH TEXT
-========================================================= */
+   ========================================================= */
 
 function buildResumeText(resume) {
   return normalizeText(
@@ -688,17 +647,13 @@ const JobMatch = () => {
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
 
   const storedResume = useMemo(() => {
-    const stored =
-      localStorage.getItem("resumeData") || localStorage.getItem("cvData");
+    // Read-only. loadResume() never writes, so opening this page cannot alter
+    // stored data. It also falls through a corrupt resumeData to a valid
+    // legacy cvData record instead of masking it. A resume with no content
+    // keeps the null sentinel so the honest "No Resume Found" state is shown.
+    const loaded = loadResume();
 
-    if (!stored) return null;
-
-    try {
-      return normalizeResume(JSON.parse(stored));
-    } catch (error) {
-      console.error("Could not read resume data:", error);
-      return null;
-    }
+    return isEmptyResume(loaded) ? null : loaded;
   }, []);
 
   const analysis = useMemo(() => {

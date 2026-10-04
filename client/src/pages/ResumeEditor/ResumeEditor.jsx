@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Navbar/Sidebar";
+import { loadResume, saveResume, createId } from "../../lib/resumeSchema";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -27,114 +28,6 @@ const templates = [
 ];
 
 const sections = ["Contact", "Summary", "Experience", "Education", "Skills"];
-
-// ========================================
-// DEFAULT RESUME
-// ========================================
-
-const defaultResume = {
-  contact: {
-    name: "Jordan Davis",
-    title: "Senior Software Engineer",
-    email: "jordan@email.com",
-    phone: "+1 (415) 555-0182",
-    location: "San Francisco, CA",
-    linkedin: "linkedin.com/in/jordandavis",
-  },
-
-  summary:
-    "Senior Software Engineer with 6+ years of experience building scalable web applications. Specialized in React, TypeScript, and distributed systems. Proven track record of delivering high-impact features.",
-
-  experience: [
-    {
-      id: 1,
-      role: "Senior Software Engineer",
-      company: "Stripe",
-      period: "2022 – Present",
-      bullets: [
-        "Led migration of payment infrastructure serving 2M+ daily transactions",
-        "Reduced API latency by 43% through caching and query optimization",
-        "Authored 3 internal RFCs adopted across 6 engineering teams",
-      ],
-    },
-    {
-      id: 2,
-      role: "Software Engineer",
-      company: "Airbnb",
-      period: "2019 – 2022",
-      bullets: [
-        "Built search ranking algorithm improving booking conversion by 18%",
-        "Mentored 4 junior engineers in React and TypeScript best practices",
-      ],
-    },
-  ],
-
-  education: [
-    {
-      id: 1,
-      degree: "B.S. Computer Science",
-      school: "UC Berkeley",
-      period: "2015 – 2019",
-    },
-  ],
-
-  skills: [
-    "React",
-    "TypeScript",
-    "Node.js",
-    "PostgreSQL",
-    "AWS",
-    "Docker",
-    "GraphQL",
-    "Python",
-  ],
-};
-
-// ========================================
-// NORMALIZE IMPORTED RESUME
-// ========================================
-
-const normalizeResume = (data) => {
-  if (!data || typeof data !== "object") {
-    return defaultResume;
-  }
-
-  return {
-    contact: {
-      name: data.contact?.name || "",
-      title: data.contact?.title || "",
-      email: data.contact?.email || "",
-      phone: data.contact?.phone || "",
-      location: data.contact?.location || "",
-      linkedin: data.contact?.linkedin || "",
-    },
-
-    summary: data.summary || "",
-
-    experience: Array.isArray(data.experience)
-      ? data.experience.map((item, index) => ({
-          id: item.id || Date.now() + index,
-          role: item.role || "",
-          company: item.company || "",
-          period: item.period || "",
-          bullets: Array.isArray(item.bullets)
-            ? item.bullets.filter(Boolean)
-            : [],
-        }))
-      : [],
-
-    education: Array.isArray(data.education)
-      ? data.education.map((item, index) => ({
-          id: item.id || Date.now() + index,
-          degree: item.degree || "",
-          school: item.school || "",
-          period: item.period || "",
-        }))
-      : [],
-
-    skills: Array.isArray(data.skills) ? data.skills.filter(Boolean) : [],
-  };
-};
 
 // ========================================
 // COMPONENT
@@ -173,34 +66,19 @@ const ResumeEditor = () => {
   // ========================================
 
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [zoom, setZoom] = useState(90);
 
   // ========================================
   // RESUME STATE
   // ========================================
+  // Reads only. loadResume() never writes, so opening this page can never
+  // alter stored data. A corrupt primary record falls through to the legacy
+  // record; if nothing usable exists the editor starts genuinely blank rather
+  // than showing invented sample data.
+  // ========================================
 
-  const [resume, setResume] = useState(() => {
-    try {
-      // First try resumeData
-      const savedResume = localStorage.getItem("resumeData");
-
-      // If resumeData doesn't exist,
-      // try cvData
-      const cvData = localStorage.getItem("cvData");
-
-      const data = savedResume || cvData;
-
-      if (!data) {
-        return defaultResume;
-      }
-
-      return normalizeResume(JSON.parse(data));
-    } catch (error) {
-      console.error("Failed to load resume:", error);
-
-      return defaultResume;
-    }
-  });
+  const [resume, setResume] = useState(() => loadResume());
 
   // ========================================
   // ACCENT COLOR
@@ -215,15 +93,33 @@ const ResumeEditor = () => {
   // ========================================
 
   const handleSave = () => {
-    const data = JSON.stringify(resume);
+    // documentTitle is trimmed before persisting; a blank value is stored as
+    // an empty string. "Untitled Resume" is a display fallback only and is
+    // never written to storage.
+    const result = saveResume({
+      ...resume,
+      documentTitle: (resume.documentTitle || "").trim(),
+    });
 
-    localStorage.setItem("resumeData", data);
+    // Never claim success when persistence failed — the previous
+    // implementation threw here and silently lost the user's edits.
+    if (!result.ok) {
+      setSaved(false);
+      setSaveError(
+        "Could not save your resume. Your browser storage may be full or unavailable.",
+      );
 
-    localStorage.setItem("cvData", data);
+      return;
+    }
+
+    // Adopt the persisted canonical object so in-memory state and stored
+    // state stay identical, including the document id assigned on first save.
+    setResume(result.resume);
+
+    setSaveError("");
+    setSaved(true);
 
     localStorage.setItem("activeTemplate", activeTemplate.toString());
-
-    setSaved(true);
 
     setTimeout(() => {
       setSaved(false);
@@ -242,6 +138,21 @@ const ResumeEditor = () => {
         ...prev.contact,
         [field]: value,
       },
+    }));
+  };
+
+  // ========================================
+  // DOCUMENT TITLE
+  //
+  // `documentTitle` is the name of this resume document. It is NOT the
+  // person's professional title, which lives on `contact.title`. The two
+  // are edited independently and must never overwrite each other.
+  // ========================================
+
+  const updateDocumentTitle = (value) => {
+    setResume((prev) => ({
+      ...prev,
+      documentTitle: value,
     }));
   };
 
@@ -301,7 +212,7 @@ const ResumeEditor = () => {
         ...prev.experience,
 
         {
-          id: Date.now(),
+          id: createId(),
           role: "New Job Title",
           company: "Company Name",
           period: "Year – Present",
@@ -378,10 +289,11 @@ const ResumeEditor = () => {
         ...prev.education,
 
         {
-          id: Date.now(),
+          id: createId(),
           degree: "New Degree",
           school: "University Name",
           period: "Year – Year",
+          field: "",
         },
       ],
     }));
@@ -430,12 +342,25 @@ const ResumeEditor = () => {
   // ========================================
 
   const handleAnalyze = () => {
-    const data = JSON.stringify(resume);
+    const result = saveResume({
+      ...resume,
+      documentTitle: (resume.documentTitle || "").trim(),
+    });
 
-    localStorage.setItem("resumeData", data);
+    // Analysis reads from storage, so navigating after a failed write would
+    // silently score stale data. Stay put and tell the user instead.
+    if (!result.ok) {
+      setSaved(false);
+      setSaveError(
+        "Could not save your resume, so the analysis was not run. Your browser storage may be full or unavailable.",
+      );
 
-    localStorage.setItem("cvData", data);
+      return;
+    }
 
+    setResume(result.resume);
+
+    setSaveError("");
     localStorage.setItem("activeTemplate", activeTemplate.toString());
 
     navigate("/analysis");
@@ -525,8 +450,7 @@ const ResumeEditor = () => {
 
             <div>
               <div className="font-semibold text-[#0F172A] text-sm">
-                {resume.contact.name || "Your Resume"}
-                's Resume
+                {resume.documentTitle?.trim() || "Your Resume"}
               </div>
 
               <div className="text-[10px] text-[#94A3B8]">
@@ -568,6 +492,12 @@ const ResumeEditor = () => {
             </button>
           </div>
         </div>
+
+        {saveError && (
+          <div className="bg-[#FEF2F2] border-b border-[#FECACA] text-[#DC2626] text-xs px-6 py-2">
+            {saveError}
+          </div>
+        )}
 
         <div className="flex flex-1 overflow-hidden">
           {/* LEFT EDITOR */}
@@ -667,6 +597,28 @@ const ResumeEditor = () => {
                   </h3>
 
                   <div className="flex flex-col gap-3">
+                    {/* RESUME NAME (document name, not job title) */}
+
+                    <div>
+                      <label className="block text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wide mb-1">
+                        Resume Name
+                      </label>
+
+                      <input
+                        value={resume.documentTitle || ""}
+                        onChange={(e) =>
+                          updateDocumentTitle(e.target.value)
+                        }
+                        placeholder="e.g. Yusra Ishaq — DevOps Resume"
+                        className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2 text-xs outline-none focus:border-[#2563EB]"
+                      />
+
+                      <p className="text-[10px] text-[#94A3B8] mt-1">
+                        This is the name of this resume document, not your job
+                        title.
+                      </p>
+                    </div>
+
                     {[
                       ["name", "Full Name"],
                       ["title", "Professional Title"],
@@ -674,6 +626,7 @@ const ResumeEditor = () => {
                       ["phone", "Phone Number"],
                       ["location", "Location"],
                       ["linkedin", "LinkedIn"],
+                      ["github", "GitHub"],
                     ].map(([field, label]) => (
                       <div key={field}>
                         <label className="block text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wide mb-1">

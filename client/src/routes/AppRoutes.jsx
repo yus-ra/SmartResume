@@ -9,6 +9,7 @@ import ImportResume from "../pages/importResume/ImportResume";
 import JobMatch from "../pages/JobMatch/JobMatch";
 import JobMatchResults from "../pages/JobMatch/JobMatchResults";
 import Portfolio from "../pages/Portfolio/Portfolio";
+import Settings from "../pages/Settings/Settings";
 import ProtectedRoute from "./ProtectedRoute";
 
 const AppRoutes = () => {
@@ -71,6 +72,15 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Portfolio />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <Settings />
           </ProtectedRoute>
         }
       />

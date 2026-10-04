@@ -1,4 +1,10 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
 
 const STORAGE_KEY = "smartresume_user";
 
@@ -16,10 +22,15 @@ const readStoredUser = () => {
       return null;
     }
 
+    const firstName = parsed.firstName || "SmartResume";
+    const surname = parsed.surname || "";
+    const fullName = `${firstName}${surname ? " " + surname : ""}`;
+
     return {
       id: parsed.id || crypto.randomUUID(),
-      firstName: parsed.firstName || "SmartResume",
-      surname: parsed.surname || "",
+      firstName,
+      surname,
+      fullName,
       email: parsed.email || "",
     };
   } catch (error) {
@@ -32,10 +43,15 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => readStoredUser());
 
   const login = (userData) => {
+    const firstName = userData?.firstName || "SmartResume";
+    const surname = userData?.surname || "";
+    const fullName = `${firstName}${surname ? " " + surname : ""}`;
+
     const normalizedUser = {
       id: userData?.id || crypto.randomUUID(),
-      firstName: userData?.firstName || "SmartResume",
-      surname: userData?.surname || "",
+      firstName,
+      surname,
+      fullName,
       email: userData?.email || "",
     };
 
@@ -49,14 +65,57 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  /*
+   * Edit the signed-in user's profile.
+   *
+   * This is LOCAL to the current browser only. SmartResume has no backend
+   * authentication yet, so this writes the same `smartresume_user` key the
+   * rest of the auth layer already owns. It deliberately does not touch
+   * resume or portfolio storage.
+   */
+  const updateProfile = useCallback(
+    (updates = {}) => {
+      if (!user) {
+        return null;
+      }
+
+      const firstName =
+        updates.firstName === undefined ? user.firstName : updates.firstName;
+
+      const surname =
+        updates.surname === undefined ? user.surname : updates.surname;
+
+      const email =
+        updates.email === undefined ? user.email : updates.email;
+
+      const fullName = `${firstName}${surname ? " " + surname : ""}`;
+
+      const updatedUser = {
+        id: user.id,
+        firstName,
+        surname,
+        fullName,
+        email,
+      };
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
+
+      setUser(updatedUser);
+
+      return updatedUser;
+    },
+    [user],
+  );
+
   const value = useMemo(
     () => ({
       user,
       isAuthenticated: Boolean(user),
       login,
       logout,
+      updateProfile,
     }),
-    [user],
+    [user, updateProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

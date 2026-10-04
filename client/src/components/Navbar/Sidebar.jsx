@@ -58,23 +58,15 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
-  const [userState, setUserState] = useState(() => {
-    const fullName = user?.firstName
-      ? `${user.firstName}${user.surname ? " " + user.surname : ""}`
-      : "SmartResume User";
-    return {
-      fullName,
-      initials: getInitials(fullName),
-    };
-  });
+  const [userState, setUserState] = useState(() => ({
+    fullName: user?.fullName || "SmartResume User",
+    initials: getInitials(user?.fullName || "SmartResume User"),
+  }));
 
   useEffect(() => {
-    const fullName = user?.firstName
-      ? `${user.firstName}${user.surname ? " " + user.surname : ""}`
-      : "SmartResume User";
     setUserState({
-      fullName,
-      initials: getInitials(fullName),
+      fullName: user?.fullName || "SmartResume User",
+      initials: getInitials(user?.fullName || "SmartResume User"),
     });
   }, [user]);
 

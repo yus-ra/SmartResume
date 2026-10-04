@@ -1,6 +1,11 @@
 import { useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../components/Navbar/Sidebar";
+import {
+  normalizeResume,
+  saveResume,
+  createId,
+} from "../../lib/resumeSchema";
 import * as pdfjsLib from "pdfjs-dist";
 import mammoth from "mammoth";
 
@@ -53,6 +58,69 @@ const sectionHeadings = [
   "achievements",
 ];
 
+/* ========================================
+   NON-TARGET SECTION HEADINGS
+   These are sections the parser does not import (it has no
+   destination field for them). They are recognised ONLY so that
+   findSection() stops at them, instead of absorbing their content
+   into the preceding target section.
+
+   They are deliberately kept out of sectionHeadings above so that
+   the name/title heuristics keep their current behaviour.
+   ========================================== */
+
+const nonTargetSectionHeadings = [
+  "skills & tools",
+  "skills and tools",
+  "tools",
+  "tech stack",
+  "technology stack",
+  "publications",
+  "publication",
+  "volunteer",
+  "volunteering",
+  "additional information",
+  "personal details",
+  "personal information",
+  "career history",
+  "training",
+  "trainings",
+  "workshop",
+  "workshops",
+  "experience & projects",
+  "research",
+  "honors",
+  "honours",
+  "activities",
+  "memberships",
+  "patents",
+];
+
+/* ========================================
+   BULLET GLYPHS
+   One shared definition used by normalizeExtractedText(),
+   cleanBullet(), parseExperience() and parseSkills() so that a
+   bullet is recognised consistently everywhere.
+
+   `visualGlyphs` are bullet characters that never appear inside a
+   date range, so they are safe to fold onto a single canonical
+   bullet character.
+
+   `bulletChars` additionally includes the dash-like characters.
+   Those are only stripped when they LEAD a line, so a hyphen
+   inside "2022 - 2026" is never touched.
+   ========================================== */
+
+const bulletVisualGlyphs = "•●▪◦○·⁃‧∙*";
+
+const bulletChars = `${bulletVisualGlyphs}–—-`;
+
+const bulletStartRegex = new RegExp(`^[${bulletChars}]`);
+
+const bulletPrefixRegex = new RegExp(`^[${bulletChars}]\\s*`);
+
+const bulletVisualRegex = new RegExp(`[${bulletVisualGlyphs}]`, "g");
+
 // ========================================
 // NORMALIZE HEADING
 // ========================================
@@ -77,6 +145,21 @@ const isSectionHeading = (text = "") => {
   });
 };
 
+/* ========================================
+   CHECK SECTION BOUNDARY
+
+   True for both headings the parser imports and headings it does
+   not import. Used by findSection() to stop collecting a section.
+   ========================================== */
+
+const isSectionBoundary = (text = "") => {
+  if (isSectionHeading(text)) {
+    return true;
+  }
+
+  return nonTargetSectionHeadings.includes(normalizeHeading(text));
+};
+
 // ========================================
 // NORMALIZE EXTRACTED TEXT
 // IMPORTANT:
@@ -87,7 +170,7 @@ const normalizeExtractedText = (text = "") => {
   return text
     .replace(/\r/g, "")
     .replace(/\t/g, " ")
-    .replace(/[•●▪◦]/g, "•")
+    .replace(bulletVisualRegex, "•")
     .split("\n")
     .map((line) => line.replace(/[ ]{2,}/g, " ").trim())
     .filter(Boolean)
@@ -132,7 +215,7 @@ const findSection = (lines, keywords) => {
   for (let i = index + 1; i < lines.length; i++) {
     const currentLine = lines[i];
 
-    if (isSectionHeading(currentLine)) {
+    if (isSectionBoundary(currentLine)) {
       break;
     }
 
@@ -204,6 +287,72 @@ const findGithub = (text) => {
 // FIND NAME
 // ========================================
 
+/*
+ * Words that strongly indicate the line is a job title rather than a
+ * person's name. Used to avoid the failure mode where an unrecognised
+ * name line causes the following job title to be imported as the name.
+ */
+const jobTitleWords = [
+  "engineer",
+  "developer",
+  "programmer",
+  "manager",
+  "analyst",
+  "consultant",
+  "specialist",
+  "architect",
+  "administrator",
+  "coordinator",
+  "assistant",
+  "supervisor",
+  "executive",
+  "director",
+  "officer",
+  "founder",
+  "president",
+  "technician",
+  "accountant",
+  "attorney",
+  "scientist",
+  "researcher",
+  "designer",
+  "intern",
+  "lead",
+  "freelance",
+  "consultancy",
+];
+
+const jobTitleRegex = new RegExp(`\\b(?:${jobTitleWords.join("|")})\\b`, "i");
+
+/*
+ * Conservative "name-ish" validation.
+ *
+ * Allows letters, digits and the punctuation that legitimately appears
+ * in a name: apostrophe, hyphen, period, comma. Anything else (brackets,
+ * slashes, underscores, at-signs, ...) is rejected outright, which is what
+ * keeps "(555) 123-4567" and "yusra@example.com" out of contact.name.
+ *
+ * A letter-ratio check then rejects lines that are mostly punctuation or
+ * digits, so a stray number line cannot pass.
+ */
+const nameShapeRegex = /^[A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9'.,\- ]*$/;
+
+const isNameShaped = (text = "") => {
+  if (!nameShapeRegex.test(text)) {
+    return false;
+  }
+
+  const significant = text.replace(/\s/g, "");
+
+  if (!significant) {
+    return false;
+  }
+
+  const letters = (significant.match(/[A-Za-zÀ-ÿ]/g) || []).length;
+
+  return letters / significant.length >= 0.6;
+};
+
 const findName = (lines) => {
   const excludedWords = [
     "resume",
@@ -254,31 +403,30 @@ const findName = (lines) => {
       continue;
     }
 
+    // A name usually has 1–5 words
     const words = cleanLine.split(/\s+/);
 
-    // A name usually has 2–5 words
-    if (words.length < 2 || words.length > 5) {
+    if (words.length > 5) {
       continue;
     }
 
-    // Name should mostly contain letters
-    if (!/^[A-Za-zÀ-ÿ' -]+$/.test(cleanLine)) {
-      continue;
-    }
-
-    // Avoid sentences
+    // Skip long sentences
     if (cleanLine.length > 45) {
       continue;
     }
 
-    return cleanLine
-      .split(/\s+/)
-      .map((word) => {
-        if (!word) return "";
+    if (!isNameShaped(cleanLine)) {
+      continue;
+    }
 
-        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-      })
-      .join(" ");
+    // Never import a job title as the person's name
+    if (jobTitleRegex.test(cleanLine)) {
+      continue;
+    }
+
+    // Return the source text unchanged. Casing, apostrophes and hyphens
+    // are the user's own and must not be rewritten.
+    return cleanLine;
   }
 
   return "";
@@ -468,16 +616,65 @@ const periodRegex =
 const monthYearPeriodRegex =
   /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(?:19|20)\d{2}\s*(?:[-–—]|to)\s*(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(?:19|20)\d{2}|present|current)\b/i;
 
-const containsPeriod = (line) => {
-  return periodRegex.test(line) || monthYearPeriodRegex.test(line);
+/*
+ * The same two grammars combined into one scanner, so the matched date
+ * text and its position inside the line can be recovered. This lets the
+ * parsers peel a trailing date off a line that also carries a role or a
+ * school name, instead of discarding the rest of the line.
+ */
+const periodScanRegex = new RegExp(
+  `${periodRegex.source}|${monthYearPeriodRegex.source}`,
+  "i",
+);
+
+/* ========================================
+   SPLIT ROLE AND COMPANY
+
+   Splits "Senior Engineer, Stripe" into role + company.
+
+   Only unambiguous separators are used. A bare hyphen is NOT a
+   separator because job titles legitimately contain them
+   ("Full-stack Developer"). When the line has more than two parts
+   the whole line is kept as the role so that no information is lost.
+   ========================================== */
+
+const roleCompanySeparators = /\s*(?:,|\||—|–|\s+-\s+)\s*/;
+
+const splitRoleCompany = (text = "") => {
+  const parts = text
+    .split(roleCompanySeparators)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return { role: "", company: "" };
+  }
+
+  if (parts.length === 1) {
+    return { role: parts[0], company: "" };
+  }
+
+  if (parts.length === 2) {
+    return { role: parts[0], company: parts[1] };
+  }
+
+  return { role: text.trim(), company: "" };
 };
 
-// ========================================
-// CLEAN BULLET
-// ========================================
+/* ========================================
+   SEPARATOR TRIM
+   Strips separators left dangling after a date is peeled off a line.
+   ========================================== */
+
+const trimSeparators = (text = "") =>
+  text.replace(/^[\s,|]+/, "").replace(/[\s,|—–-]+$/, "").trim();
+
+/* ========================================
+   CLEAN BULLET
+   ========================================== */
 
 const cleanBullet = (line) => {
-  return line.replace(/^[•●▪◦\-–—]\s*/, "").trim();
+  return line.replace(bulletPrefixRegex, "").trim();
 };
 
 // ========================================
@@ -494,12 +691,34 @@ const parseExperience = (lines) => {
   let currentExperience = null;
 
   const createExperience = () => ({
-    id: Date.now() + Math.floor(Math.random() * 100000),
+    id: createId(),
     role: "",
     company: "",
     period: "",
     bullets: [],
   });
+
+  /*
+   * A new entry starts only when the current one already looks finished,
+   * meaning it has a period or has collected bullets. Consecutive plain
+   * lines therefore stay together as role + company of one entry.
+   */
+  const beginEntryIfNeeded = () => {
+    if (
+      currentExperience &&
+      (currentExperience.period || currentExperience.bullets.length > 0)
+    ) {
+      experiences.push(currentExperience);
+
+      currentExperience = null;
+    }
+
+    if (!currentExperience) {
+      currentExperience = createExperience();
+    }
+
+    return currentExperience;
+  };
 
   for (const line of lines) {
     if (!line) {
@@ -507,69 +726,118 @@ const parseExperience = (lines) => {
     }
 
     // ========================================
-    // DATE FOUND
-    // ========================================
-
-    if (containsPeriod(line)) {
-      // If this line contains both a date and useful text,
-      // keep the text as part of the experience.
-      const newExperience = createExperience();
-
-      newExperience.period = line;
-
-      if (currentExperience) {
-        experiences.push(currentExperience);
-      }
-
-      currentExperience = newExperience;
-
-      continue;
-    }
-
-    // ========================================
-    // CREATE FIRST EXPERIENCE
-    // ========================================
-
-    if (!currentExperience) {
-      currentExperience = createExperience();
-    }
-
-    // ========================================
     // BULLET
     // ========================================
 
-    if (/^[•●▪◦\-–—]/.test(line)) {
-      currentExperience.bullets.push(cleanBullet(line));
+    if (bulletStartRegex.test(line)) {
+      /*
+       * A bullet always belongs to the entry currently being built, even
+       * once that entry already has its period. Starting a new entry here
+       * would split every job into "job" + "bullets only".
+       */
+      if (!currentExperience) {
+        currentExperience = createExperience();
+      }
+
+      const text = cleanBullet(line);
+
+      if (text.length > 10) {
+        currentExperience.bullets.push(text);
+      }
 
       continue;
     }
 
     // ========================================
-    // ROLE
+    // PERIOD
     // ========================================
 
-    if (!currentExperience.role && line.length <= 100) {
-      currentExperience.role = line;
+    const periodMatch = periodScanRegex.exec(line);
+
+    if (periodMatch) {
+      const periodText = periodMatch[0].trim();
+
+      const residual = trimSeparators(
+        `${line.slice(0, periodMatch.index)} ${line.slice(
+          periodMatch.index + periodMatch[0].length,
+        )}`,
+      );
+
+      if (residual) {
+        // ========================================
+        // ROLE / COMPANY ON THE SAME LINE AS A DATE
+        // "Senior Engineer, Stripe — Jan 2020 - Present"
+        // ========================================
+
+        const entry = beginEntryIfNeeded();
+
+        const { role, company } = splitRoleCompany(residual);
+
+        if (!entry.role && role) {
+          entry.role = role;
+        }
+
+        if (!entry.company && company) {
+          entry.company = company;
+        }
+
+        if (!entry.period) {
+          entry.period = periodText;
+        }
+      } else {
+        // ========================================
+        // DATE ONLY
+        // The date belongs to the entry that already has a role or a
+        // company. It must never become an entry of its own, and a date
+        // with nothing to attach to is ignored rather than stored as a
+        // role-less entry.
+        // ========================================
+
+        if (
+          currentExperience &&
+          (currentExperience.role ||
+            currentExperience.company ||
+            currentExperience.bullets.length > 0)
+        ) {
+          if (!currentExperience.period) {
+            currentExperience.period = periodText;
+          }
+        }
+      }
 
       continue;
     }
 
     // ========================================
-    // COMPANY
+    // ROLE / COMPANY
     // ========================================
 
-    if (!currentExperience.company && line.length <= 100) {
-      currentExperience.company = line;
+    const entry = beginEntryIfNeeded();
+
+    const { role, company } = splitRoleCompany(line);
+
+    if (!entry.role && role && line.length <= 100) {
+      entry.role = role;
+
+      if (company && !entry.company) {
+        entry.company = company;
+      }
+
+      continue;
+    }
+
+    if (!entry.company && line.length <= 100) {
+      entry.company = company || role;
 
       continue;
     }
 
     // ========================================
-    // ACHIEVEMENT / RESPONSIBILITY
+    // ANYTHING ELSE LONG ENOUGH IS A BULLET
     // ========================================
 
     if (line.length > 10) {
-      currentExperience.bullets.push(cleanBullet(line));
+      entry.bullets.push(cleanBullet(line));
     }
   }
 
@@ -601,6 +869,52 @@ const parseExperience = (lines) => {
 // PARSE EDUCATION
 // ========================================
 
+// ========================================
+// EDUCATION CLASSIFICATION
+// ========================================
+
+/*
+ * Conservative degree detection. Only widely used abbreviations are
+ * listed; this is intentionally not exhaustive, because a false
+ * positive would turn a school name into a degree.
+ */
+const degreeKeywordRegex =
+  /\b(?:b\.?sc|b\.?s\.?c|bachelor|b\.?a\b|b\.?s\b|b\.?eng|beng|m\.?sc|m\.?s\.?c|master|m\.?a\b|mba|ph\.?d|doctor(?:ate)?|hnd|ond|n\.?d\b|diploma|associate(?:s)?(?: degree)?|foundation|postgraduate)\b/i;
+
+const isDegreeLine = (line = "") => degreeKeywordRegex.test(line);
+
+/*
+ * Derive the field of study from a degree string.
+ *
+ * The prefix is matched greedily so that the LAST "in"/"of" wins:
+ * "Bachelor of Science in Computer Science" yields "Computer Science"
+ * rather than "Science in Computer Science".
+ *
+ * The degree itself is never shortened.
+ */
+const educationFieldRegex =
+  /^.*\b(?:in|of)\s+([A-Za-z][A-Za-z&,'.-]*(?:\s+[A-Za-z&,'.-]+)*)$/;
+
+const extractEducationField = (degree = "") => {
+  const match = degree.match(educationFieldRegex);
+
+  if (!match) {
+    return "";
+  }
+
+  const field = match[1].trim();
+
+  if (!field || field.length > 60) {
+    return "";
+  }
+
+  return field;
+};
+
+// ========================================
+// PARSE EDUCATION
+// ========================================
+
 const parseEducation = (lines) => {
   if (!lines.length) {
     return [];
@@ -611,49 +925,88 @@ const parseEducation = (lines) => {
   let currentEducation = null;
 
   const createEducation = () => ({
-    id: Date.now() + Math.floor(Math.random() * 100000),
+    id: createId(),
     degree: "",
     school: "",
+    field: "",
     period: "",
   });
+
+  const startEntryIfComplete = () => {
+    if (
+      currentEducation &&
+      currentEducation.degree &&
+      currentEducation.school
+    ) {
+      education.push(currentEducation);
+
+      currentEducation = null;
+    }
+
+    if (!currentEducation) {
+      currentEducation = createEducation();
+    }
+
+    return currentEducation;
+  };
 
   for (const line of lines) {
     if (!line) {
       continue;
     }
 
-    // ========================================
-    // PERIOD
-    // ========================================
-
-    if (containsPeriod(line)) {
-      if (!currentEducation) {
-        currentEducation = createEducation();
-      }
-
-      currentEducation.period = line;
-
-      education.push(currentEducation);
-
-      currentEducation = null;
-
-      continue;
-    }
-
-    // ========================================
-    // CREATE ENTRY
-    // ========================================
-
-    if (!currentEducation) {
-      currentEducation = createEducation();
-    }
+    const periodMatch = periodScanRegex.exec(line);
 
     // ========================================
     // DEGREE
     // ========================================
 
-    if (!currentEducation.degree) {
-      currentEducation.degree = line;
+    if (isDegreeLine(line)) {
+      const entry = startEntryIfComplete();
+
+      // A degree and a date on one line, e.g.
+      // "BSc Computer Science 2022 - 2026"
+      if (periodMatch) {
+        const before = trimSeparators(
+          line.slice(0, periodMatch.index),
+        );
+
+        const after = trimSeparators(
+          line.slice(periodMatch.index + periodMatch[0].length),
+        );
+
+        entry.degree = before || line;
+
+        if (!entry.period) {
+          entry.period = periodMatch[0].trim();
+        }
+
+        if (after && !entry.school) {
+          entry.school = after;
+        }
+      } else if (!entry.degree) {
+        entry.degree = line;
+      }
+
+      continue;
+    }
+
+    // ========================================
+    // PERIOD
+    //
+    // The entry stays open after a period so that a trailing degree
+    // ("school / period / degree") can still join it. A period never
+    // creates an entry on its own.
+    // ========================================
+
+    if (periodMatch) {
+      if (!currentEducation) {
+        currentEducation = createEducation();
+      }
+
+      if (!currentEducation.period) {
+        currentEducation.period = periodMatch[0].trim();
+      }
 
       continue;
     }
@@ -662,21 +1015,11 @@ const parseEducation = (lines) => {
     // SCHOOL
     // ========================================
 
-    if (!currentEducation.school) {
-      currentEducation.school = line;
+    const entry = startEntryIfComplete();
 
-      continue;
+    if (!entry.school) {
+      entry.school = line;
     }
-
-    // ========================================
-    // IF CURRENT ENTRY IS COMPLETE
-    // ========================================
-
-    education.push(currentEducation);
-
-    currentEducation = createEducation();
-
-    currentEducation.degree = line;
   }
 
   if (currentEducation) {
@@ -684,6 +1027,10 @@ const parseEducation = (lines) => {
   }
 
   return education
+    .map((item) => ({
+      ...item,
+      field: item.field || extractEducationField(item.degree),
+    }))
     .filter((item) => item.degree || item.school || item.period)
     .slice(0, 4);
 };
@@ -702,7 +1049,7 @@ const parseSkills = (lines) => {
   for (const line of lines) {
     if (!line) continue;
 
-    const pieces = line
+    const pieces = cleanBullet(line)
       .split(/[,|•·;]/)
       .map((skill) => skill.replace(/^[\-–—]\s*/, "").trim())
       .filter(Boolean);
@@ -724,11 +1071,6 @@ const parseSkills = (lines) => {
 
 const parseResume = (text) => {
   const lines = getLines(text);
-
-  console.log("==============================");
-  console.log("EXTRACTED RESUME LINES");
-  console.log("==============================");
-  console.log(lines);
 
   // ========================================
   // CONTACT
@@ -828,12 +1170,33 @@ const parseResume = (text) => {
     skills,
   };
 
-  console.log("==============================");
-  console.log("PARSED RESUME");
-  console.log("==============================");
-  console.log(parsedResume);
-
   return parsedResume;
+};
+
+// ========================================
+// DOCUMENT TITLE FROM FILENAME
+//
+// The parser itself never touches file metadata; the document name is
+// derived from the uploaded filename in the import flow and applied
+// before normalization.
+//
+// It is deliberately NOT derived from contact.title: the document name
+// and the professional title are different things.
+// ========================================
+
+const deriveDocumentTitle = (fileName = "") => {
+  const withoutExtension = fileName.replace(/\.[^.]+$/, "");
+
+  const spaced = withoutExtension
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const withoutSuffix = spaced
+    .replace(/\s+(?:cv|resume|curriculum vitae)$/i, "")
+    .trim();
+
+  return withoutSuffix || spaced || withoutExtension.trim();
 };
 
 // ========================================
@@ -1038,14 +1401,6 @@ const ImportResume = () => {
         );
       }
 
-      console.log("==============================");
-
-      console.log("RAW EXTRACTED TEXT:");
-
-      console.log(extractedText);
-
-      console.log("==============================");
-
       // ========================================
       // PARSING
       // ========================================
@@ -1076,22 +1431,29 @@ const ImportResume = () => {
       }
 
       // ========================================
+      // NORMALIZE TO CANONICAL SCHEMA
+      // ========================================
+
+      const canonicalResume = normalizeResume({
+        ...parsedResume,
+
+        // The parser never sees the file, so the document name is applied
+        // here, before normalization.
+        documentTitle: deriveDocumentTitle(file.name),
+      });
+
+      // ========================================
       // SAVE RESUME
       // ========================================
 
-      const data = JSON.stringify(parsedResume);
+      const saveResult = saveResume(canonicalResume);
 
-      /*
-       * Save using both keys for now.
-       *
-       * Once we see your Editor.jsx,
-       * we can keep only the exact key
-       * your editor uses.
-       */
-
-      localStorage.setItem("resumeData", data);
-
-      localStorage.setItem("cvData", data);
+      if (!saveResult.ok) {
+        throw new Error(
+          saveResult.error?.message ||
+            "We imported your resume, but we couldn't save it. Please try again.",
+        );
+      }
 
       // ========================================
       // SUCCESS

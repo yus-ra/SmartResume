@@ -17,6 +17,8 @@ import {
 
 import Sidebar from "../../components/Navbar/Sidebar";
 
+import { loadResume, isEmptyResume } from "../../lib/resumeSchema";
+
 /* =========================================================
    THEMES
 ========================================================= */
@@ -75,38 +77,8 @@ const defaultPortfolio = {
 };
 
 /* =========================================================
-   RESUME NORMALIZER
-========================================================= */
-
-const normalizeResume = (data) => {
-  if (!data || typeof data !== "object") {
-    return null;
-  }
-
-  return {
-    contact: {
-      name: data.contact?.name || "",
-      title: data.contact?.title || "",
-      email: data.contact?.email || "",
-      phone: data.contact?.phone || "",
-      location: data.contact?.location || "",
-      linkedin: data.contact?.linkedin || "",
-      github: data.contact?.github || "",
-    },
-
-    summary: data.summary || "",
-
-    experience: Array.isArray(data.experience) ? data.experience : [],
-
-    education: Array.isArray(data.education) ? data.education : [],
-
-    skills: Array.isArray(data.skills) ? data.skills : [],
-  };
-};
-
-/* =========================================================
    HELPERS
-========================================================= */
+   ========================================================= */
 
 const createSlug = (name = "") => {
   return (
@@ -175,12 +147,9 @@ const Portfolio = () => {
 
   useEffect(() => {
     try {
-      const storedResume =
-        localStorage.getItem("resumeData") || localStorage.getItem("cvData");
+      const loadedResume = loadResume();
 
-      const parsedResume = storedResume
-        ? normalizeResume(JSON.parse(storedResume))
-        : null;
+      const parsedResume = isEmptyResume(loadedResume) ? null : loadedResume;
 
       setResume(parsedResume);
 

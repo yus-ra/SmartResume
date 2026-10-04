@@ -1,43 +1,31 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FileText,
   Plus,
   Sparkles,
   Globe,
-  Download,
-  Eye,
+  Target,
+  Briefcase,
+  GraduationCap,
+  Wrench,
+  CheckCircle2,
   ArrowUpRight,
-  MoreHorizontal,
-  TrendingUp,
-  BrainCircuit,
   ChevronRight,
-  Clock,
   Upload,
 } from "lucide-react";
 
 import Sidebar from "../../components/Navbar/Sidebar";
 import { useAuth } from "../../context/AuthContext";
+import { loadResume, isEmptyResume } from "../../lib/resumeSchema";
 
-const resumes = [
-  {
-    title: "Software Engineer Resume",
-    updated: "Updated 2 days ago",
-    ats: 92,
-    color: "#2563EB",
-  },
-  {
-    title: "Product Manager Resume",
-    updated: "Updated 1 week ago",
-    ats: 78,
-    color: "#14B8A6",
-  },
-  {
-    title: "UX Designer Resume",
-    updated: "Updated 3 weeks ago",
-    ats: 65,
-    color: "#F59E0B",
-  },
-];
+/* =========================================================
+   QUICK ACTIONS
+
+   Job Match used to live inside the header button row as a
+   card. It is now a peer action here, using the same layout
+   and palette as every other action.
+   ========================================================= */
 
 const actions = [
   {
@@ -64,74 +52,153 @@ const actions = [
     desc: "Create your professional portfolio",
     to: "/portfolio",
   },
+  {
+    icon: Target,
+    label: "Job Match",
+    desc: "Compare your resume with a job description",
+    to: "/job-match",
+  },
 ];
 
-function ATSRing({ score, color }) {
-  const radius = 24;
-  const circumference = 2 * Math.PI * radius;
-  const dash = (score / 100) * circumference;
+/* =========================================================
+   PROFILE COMPLETION
 
-  return (
-    <div className="relative flex items-center justify-center">
-      <svg width="64" height="64" viewBox="0 0 64 64">
-        <circle
-          cx="32"
-          cy="32"
-          r={radius}
-          fill="none"
-          stroke="#F1F5F9"
-          strokeWidth="5"
-        />
+   A transparent, deterministic ratio over canonical fields
+   only. Nothing here is an ATS score and nothing is stored.
 
-        <circle
-          cx="32"
-          cy="32"
-          r={radius}
-          fill="none"
-          stroke={color}
-          strokeWidth="5"
-          strokeDasharray={`${dash} ${circumference}`}
-          strokeLinecap="round"
-          transform="rotate(-90 32 32)"
-        />
-      </svg>
+   Strings count as complete when they contain non-whitespace.
+   Lists count as complete when they hold at least one entry.
+   ========================================================= */
 
-      <span className="absolute text-xs font-bold" style={{ color }}>
-        {score}%
-      </span>
-    </div>
-  );
+const PROFILE_CHECKS = [
+  { key: "contact.name", isComplete: (r) => hasText(r.contact?.name) },
+  { key: "contact.title", isComplete: (r) => hasText(r.contact?.title) },
+  { key: "contact.email", isComplete: (r) => hasText(r.contact?.email) },
+  { key: "contact.phone", isComplete: (r) => hasText(r.contact?.phone) },
+  { key: "contact.location", isComplete: (r) => hasText(r.contact?.location) },
+  { key: "contact.linkedin", isComplete: (r) => hasText(r.contact?.linkedin) },
+  { key: "contact.github", isComplete: (r) => hasText(r.contact?.github) },
+  { key: "summary", isComplete: (r) => hasText(r.summary) },
+  {
+    key: "experience",
+    isComplete: (r) => Array.isArray(r.experience) && r.experience.length > 0,
+  },
+  {
+    key: "education",
+    isComplete: (r) => Array.isArray(r.education) && r.education.length > 0,
+  },
+  {
+    key: "skills",
+    isComplete: (r) => Array.isArray(r.skills) && r.skills.length > 0,
+  },
+];
+
+function hasText(value) {
+  return typeof value === "string" && value.trim().length > 0;
 }
+
+const getProfileCompletion = (resume) => {
+  if (!resume) {
+    return 0;
+  }
+
+  const completed = PROFILE_CHECKS.filter((check) =>
+    check.isComplete(resume),
+  ).length;
+
+  return Math.round((completed / PROFILE_CHECKS.length) * 100);
+};
+
+const getIncompleteFields = (resume) =>
+  PROFILE_CHECKS.filter((check) => !check.isComplete(resume)).map(
+    (check) => check.key,
+  );
+
+/* Friendly labels for the profile completion hint. */
+const FIELD_LABELS = {
+  "contact.name": "full name",
+  "contact.title": "professional title",
+  "contact.email": "email",
+  "contact.phone": "phone",
+  "contact.location": "location",
+  "contact.linkedin": "LinkedIn",
+  "contact.github": "GitHub",
+  summary: "summary",
+  experience: "experience",
+  education: "education",
+  skills: "skills",
+};
 
 const Dashboard = () => {
   const { user } = useAuth();
 
-  const stats = [
-    {
-      label: "Total Resumes",
-      value: "3",
-      change: "+1 this month",
-      icon: FileText,
-    },
-    {
-      label: "Average ATS Score",
-      value: "78%",
-      change: "+12% improvement",
-      icon: BrainCircuit,
-    },
-    {
-      label: "Downloads",
-      value: "14",
-      change: "This month",
-      icon: Download,
-    },
-    {
-      label: "Portfolio Views",
-      value: "231",
-      change: "+18.4% this week",
-      icon: Eye,
-    },
-  ];
+  /* =======================================================
+     RESUME
+
+     Read-only. loadResume() never writes, so opening the
+     dashboard cannot alter stored data. A corrupt primary
+     record falls through to the legacy record, and a resume
+     with no meaningful content becomes null so the honest
+     empty state is shown instead of misleading zeros.
+  ======================================================= */
+
+  const [resume] = useState(() => {
+    const loaded = loadResume();
+
+    return isEmptyResume(loaded) ? null : loaded;
+  });
+
+  const hasResume = Boolean(resume);
+
+  const profileCompletion = getProfileCompletion(resume);
+  const incompleteFields = hasResume ? getIncompleteFields(resume) : [];
+
+  /* =======================================================
+     STATISTICS
+
+     Every value below is counted from the canonical resume.
+     Metrics that cannot be measured truthfully are omitted
+     rather than invented.
+  ======================================================= */
+
+  const stats = hasResume
+    ? [
+        {
+          label: "Experience",
+          value: String(resume.experience.length),
+          detail:
+            resume.experience.length === 1
+              ? "role or position"
+              : "roles or positions",
+          icon: Briefcase,
+        },
+        {
+          label: "Education",
+          value: String(resume.education.length),
+          detail:
+            resume.education.length === 1 ? "qualification" : "qualifications",
+          icon: GraduationCap,
+        },
+        {
+          label: "Skills",
+          value: String(resume.skills.length),
+          detail: resume.skills.length === 1 ? "skill listed" : "skills listed",
+          icon: Wrench,
+        },
+        {
+          label: "Profile Completion",
+          value: `${profileCompletion}%`,
+          detail:
+            incompleteFields.length === 0
+              ? "all sections filled"
+              : `add ${incompleteFields
+                  .slice(0, 3)
+                  .map((key) => FIELD_LABELS[key] || key)
+                  .join(", ")}`,
+          icon: CheckCircle2,
+        },
+      ]
+    : [];
 
   return (
     <div
@@ -146,7 +213,7 @@ const Dashboard = () => {
         ======================================== */}
 
         <header className="bg-white border-b border-[#E2E8F0]">
-          <div className="px-6 md:px-10 py-5 flex items-center justify-between">
+          <div className="px-6 md:px-10 py-5 flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-xs font-medium text-[#94A3B8] mb-1">
                 Dashboard Overview
@@ -155,13 +222,17 @@ const Dashboard = () => {
               <h1 className="text-2xl font-bold text-[#0F172A]">
                 Welcome back, {user?.firstName || "SmartResume User"}
               </h1>
+
+              <p className="text-sm text-[#64748B] mt-1">
+                {hasResume
+                  ? "Keep your resume up to date and ready for opportunities."
+                  : "Create your first resume or import an existing one to get started."}
+              </p>
             </div>
 
             {/* HEADER ACTIONS */}
 
             <div className="hidden md:flex items-center gap-3">
-              {/* IMPORT RESUME */}
-
               <Link
                 to="/import-resume"
                 className="flex items-center gap-2 border border-[#E2E8F0] hover:border-[#2563EB] text-[#475569] hover:text-[#2563EB] bg-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
@@ -170,8 +241,6 @@ const Dashboard = () => {
                 Import Resume
               </Link>
 
-              {/* CREATE RESUME */}
-
               <Link
                 to="/editor"
                 className="flex items-center gap-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm hover:shadow-md"
@@ -179,111 +248,104 @@ const Dashboard = () => {
                 <Plus size={17} />
                 Create Resume
               </Link>
-              <Link
-                to="/job-match"
-                className="bg-white border border-gray-100 rounded-2xl p-6 hover:shadow-md transition"
-              >
-                <div className="text-3xl mb-4">🎯</div>
-
-                <h3 className="font-bold text-gray-900">Job Match</h3>
-
-                <p className="text-sm text-gray-500 mt-2">
-                  Compare your resume with a job description and discover your
-                  match.
-                </p>
-
-                <div className="mt-5 text-sm font-semibold text-gray-900">
-                  Match my resume →
-                </div>
-              </Link>
             </div>
           </div>
         </header>
 
         <div className="p-6 md:p-10 max-w-[1500px] mx-auto">
           {/* ========================================
-              WELCOME BANNER
+              EMPTY STATE
+
+              Shown only when no meaningful resume exists. No
+              fabricated cards, scores, dates or statistics
+              are rendered in this branch.
           ======================================== */}
 
-          <div className="mb-8 rounded-2xl border border-[#E2E8F0] bg-white p-6 md:p-7 flex flex-col md:flex-row md:items-center justify-between gap-5">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-[#EFF6FF] flex items-center justify-center">
-                  <Sparkles size={16} className="text-[#2563EB]" />
-                </div>
-
-                <span className="text-sm font-semibold text-[#2563EB]">
-                  SmartResume AI
-                </span>
+          {!hasResume && (
+            <section className="mb-10 bg-white border border-[#E2E8F0] rounded-2xl p-8 md:p-12 text-center">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-[#EFF6FF] flex items-center justify-center">
+                <FileText size={26} className="text-[#2563EB]" />
               </div>
 
-              <h2 className="text-lg font-bold text-[#0F172A] mb-1">
-                Your resume is almost ready for opportunities.
+              <h2 className="text-xl font-bold text-[#0F172A] mt-5">
+                No resume yet
               </h2>
 
-              <p className="text-sm text-[#64748B]">
-                Improve your ATS score and increase your chances of getting
-                noticed.
+              <p className="text-sm text-[#64748B] mt-2 max-w-md mx-auto">
+                Create your first resume or import an existing one to get
+                started.
               </p>
-            </div>
 
-            <Link
-              to="/analysis"
-              className="flex items-center gap-2 text-sm font-semibold text-[#2563EB] whitespace-nowrap"
-            >
-              Analyze Resume
-              <ArrowUpRight size={16} />
-            </Link>
-          </div>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center mt-7">
+                <Link
+                  to="/editor"
+                  className="inline-flex items-center justify-center gap-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-3 rounded-xl text-sm font-semibold transition-all"
+                >
+                  <Plus size={17} />
+                  Create Resume
+                </Link>
+
+                <Link
+                  to="/import-resume"
+                  className="inline-flex items-center justify-center gap-2 border border-[#E2E8F0] hover:border-[#2563EB] text-[#475569] px-5 py-3 rounded-xl text-sm font-semibold transition-all"
+                >
+                  <Upload size={17} />
+                  Import Resume
+                </Link>
+              </div>
+            </section>
+          )}
 
           {/* ========================================
               STATISTICS
           ======================================== */}
 
-          <section className="mb-10">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-[#0F172A]">Overview</h2>
+          {hasResume && (
+            <section className="mb-10">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-[#0F172A]">Overview</h2>
 
-              <span className="text-xs text-[#94A3B8]">Last updated today</span>
-            </div>
+                <span className="text-xs text-[#94A3B8]">
+                  From your saved resume
+                </span>
+              </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {stats.map(({ label, value, change, icon: Icon }) => (
-                <div
-                  key={label}
-                  className="bg-white border border-[#E2E8F0] rounded-2xl p-5 hover:border-[#CBD5E1] transition-colors"
-                >
-                  <div className="flex justify-between items-start mb-5">
-                    <div className="w-10 h-10 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] flex items-center justify-center">
-                      <Icon size={18} className="text-[#475569]" />
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {stats.map(({ label, value, detail, icon: Icon }) => (
+                  <div
+                    key={label}
+                    className="bg-white border border-[#E2E8F0] rounded-2xl p-5 hover:border-[#CBD5E1] transition-colors"
+                  >
+                    <div className="mb-5">
+                      <div className="w-10 h-10 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] flex items-center justify-center">
+                        <Icon size={18} className="text-[#475569]" />
+                      </div>
                     </div>
 
-                    <MoreHorizontal size={18} className="text-[#CBD5E1]" />
-                  </div>
+                    <div className="text-2xl font-bold text-[#0F172A] mb-1">
+                      {value}
+                    </div>
 
-                  <div className="text-2xl font-bold text-[#0F172A] mb-1">
-                    {value}
-                  </div>
+                    <div className="text-xs text-[#64748B] mb-1">{label}</div>
 
-                  <div className="text-xs text-[#64748B] mb-3">{label}</div>
-
-                  <div className="flex items-center gap-1 text-[11px] font-medium text-[#16A34A]">
-                    <TrendingUp size={12} />
-                    {change}
+                    <div className="text-[11px] text-[#94A3B8]">{detail}</div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </section>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* ========================================
               QUICK ACTIONS
+
+              Five actions, so the grid steps down from four
+              columns to three on large screens.
           ======================================== */}
 
           <section className="mb-10">
             <h2 className="font-semibold text-[#0F172A] mb-4">Quick Actions</h2>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {actions.map(({ icon: Icon, label, desc, to }) => (
                 <Link
                   key={label}
@@ -312,84 +374,49 @@ const Dashboard = () => {
           </section>
 
           {/* ========================================
-              RECENT RESUMES
+              YOUR RESUME
+
+              The application is single-resume by design, so
+              exactly one card is rendered. It shows
+              `documentTitle` (the document name) and
+              `contact.name` (the person). `contact.title` is
+              deliberately NOT used as the document name.
           ======================================== */}
 
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="font-semibold text-[#0F172A]">Recent Resumes</h2>
+          {hasResume && (
+            <section>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="font-semibold text-[#0F172A]">
+                    Your Resume
+                  </h2>
 
-                <p className="text-xs text-[#94A3B8] mt-1">
-                  Manage and optimize your resumes
-                </p>
+                  <p className="text-xs text-[#94A3B8] mt-1">
+                    SmartResume stores one resume at a time
+                  </p>
+                </div>
               </div>
 
-              <Link
-                to="/editor"
-                className="text-xs font-semibold text-[#2563EB] hover:underline"
-              >
-                View all
-              </Link>
-            </div>
-
-            <div className="bg-white border border-[#E2E8F0] rounded-2xl overflow-hidden">
-              {resumes.map(({ title, updated, ats, color }, index) => (
-                <div
-                  key={title}
-                  className={`group flex items-center gap-5 p-5 hover:bg-[#F8FAFC] transition-colors ${
-                    index !== resumes.length - 1
-                      ? "border-b border-[#F1F5F9]"
-                      : ""
-                  }`}
-                >
-                  {/* RESUME ICON */}
-
-                  <div
-                    className="w-11 h-11 rounded-xl flex items-center justify-center"
-                    style={{
-                      backgroundColor: `${color}12`,
-                    }}
-                  >
-                    <FileText size={19} style={{ color }} />
+              <div className="bg-white border border-[#E2E8F0] rounded-2xl overflow-hidden">
+                <div className="flex flex-wrap items-center gap-5 p-5">
+                  <div className="w-11 h-11 rounded-xl bg-[#EFF6FF] flex items-center justify-center">
+                    <FileText size={19} className="text-[#2563EB]" />
                   </div>
-
-                  {/* RESUME DETAILS */}
 
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-[#0F172A] text-sm">
-                      {title}
+                    <h3 className="font-semibold text-[#0F172A] text-sm truncate">
+                      {resume.documentTitle?.trim() || "Untitled Resume"}
                     </h3>
 
-                    <div className="flex items-center gap-2 mt-1">
-                      <Clock size={12} className="text-[#94A3B8]" />
-
-                      <span className="text-xs text-[#94A3B8]">{updated}</span>
-                    </div>
+                    <p className="text-xs text-[#94A3B8] mt-1 truncate">
+                      {resume.contact?.name?.trim() || "No name added"}
+                    </p>
                   </div>
-
-                  {/* ATS SCORE */}
-
-                  <div className="hidden sm:flex items-center gap-3">
-                    <div className="text-right">
-                      <div className="text-[10px] text-[#94A3B8]">
-                        ATS Score
-                      </div>
-
-                      <div className="text-xs font-semibold" style={{ color }}>
-                        Resume Match
-                      </div>
-                    </div>
-
-                    <ATSRing score={ats} color={color} />
-                  </div>
-
-                  {/* ACTIONS */}
 
                   <div className="flex items-center gap-2">
                     <Link
                       to="/editor"
-                      className="hidden md:block text-xs font-semibold text-[#475569] hover:text-[#2563EB] px-3 py-2"
+                      className="text-xs font-semibold text-[#475569] hover:text-[#2563EB] px-3 py-2 rounded-lg hover:bg-[#F8FAFC] transition-colors"
                     >
                       Edit
                     </Link>
@@ -402,41 +429,49 @@ const Dashboard = () => {
                     </Link>
                   </div>
                 </div>
-              ))}
-            </div>
-          </section>
+              </div>
+            </section>
+          )}
 
           {/* ========================================
-              AI INSIGHT
+              PROFILE COMPLETION DETAIL
+
+              Replaces the previous hardcoded "AI Career
+              Insight". Every statement here is derived from
+              the stored resume.
           ======================================== */}
 
-          <section className="mt-8">
-            <div className="rounded-2xl bg-[#0F172A] p-6 md:p-7 flex flex-col md:flex-row md:items-center gap-5">
-              <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
-                <Sparkles size={22} className="text-[#60A5FA]" />
-              </div>
-
-              <div className="flex-1">
-                <div className="text-sm font-semibold text-white mb-1">
-                  AI Career Insight
+          {hasResume && (
+            <section className="mt-8">
+              <div className="rounded-2xl bg-[#0F172A] p-6 md:p-7 flex flex-col md:flex-row md:items-center gap-5">
+                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
+                  <CheckCircle2 size={22} className="text-[#60A5FA]" />
                 </div>
 
-                <p className="text-sm text-[#CBD5E1] leading-relaxed">
-                  Your strongest resume has an ATS score of{" "}
-                  <span className="text-white font-semibold">92%</span>. Add
-                  more measurable achievements to improve your other resumes.
-                </p>
-              </div>
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-white mb-1">
+                    Profile Completion: {profileCompletion}%
+                  </div>
 
-              <Link
-                to="/analysis"
-                className="inline-flex items-center justify-center gap-2 bg-white text-[#0F172A] px-4 py-2.5 rounded-xl text-xs font-semibold hover:bg-[#F1F5F9] transition-colors whitespace-nowrap"
-              >
-                Get AI Insights
-                <ArrowUpRight size={15} />
-              </Link>
-            </div>
-          </section>
+                  <p className="text-sm text-[#CBD5E1] leading-relaxed">
+                    {incompleteFields.length === 0
+                      ? "Every profile section is filled in."
+                      : `Still to add: ${incompleteFields
+                          .map((key) => FIELD_LABELS[key] || key)
+                          .join(", ")}.`}
+                  </p>
+                </div>
+
+                <Link
+                  to="/editor"
+                  className="inline-flex items-center justify-center gap-2 bg-white text-[#0F172A] px-4 py-2.5 rounded-xl text-xs font-semibold hover:bg-[#F1F5F9] transition-colors whitespace-nowrap"
+                >
+                  Complete Profile
+                  <ArrowUpRight size={15} />
+                </Link>
+              </div>
+            </section>
+          )}
         </div>
       </main>
     </div>
