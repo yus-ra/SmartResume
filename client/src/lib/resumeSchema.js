@@ -162,6 +162,207 @@ export const RESUME_LOCAL_TIMESTAMP_KEY = "smartresume_local_updated_at";
  */
 export const RESUME_LEGACY_STORAGE_KEYS = ["cvData"];
 
+/* ======================================================================== *
+ * USER SCOPING
+ *
+ * Resume storage must never be shared between accounts. These keys used to be
+ * browser-global, which meant that signing out of User A and signing in as
+ * User B on the same browser exposed A's resume to B — and, worse, could push
+ * A's resume into B's cloud record.
+ *
+ * Every key below is therefore derived from the ACTIVE SCOPE:
+ *
+ *   anonymous        resumeData / cvData / smartresume_local_updated_at
+ *   authenticated    resumeData:u<id> / cvData:u<id> / smartresume_local_updated_at:u<id>
+ *
+ * The anonymous scope deliberately keeps the original un-suffixed names,
+ * because that is where pre-authentication work legitimately belongs. Those
+ * names stop being usable for resume data the moment an authenticated scope is
+ * established: runLegacyMigrationIfNeeded() quarantines them so no account can
+ * inherit them (see MIGRATION below).
+ *
+ * Consumers are unaffected: loadResume() and saveResume() take no scope
+ * argument. The scope is set once by AuthContext.
+ * ======================================================================== */
+
+const ANONYMOUS_SCOPE = null;
+
+/** Marker recording that the legacy global keys have been quarantined. */
+const MIGRATION_MARKER_KEY = "smartresume_resume_migration_v1";
+
+/** Namespace the legacy global keys are moved into. Never assigned to a user. */
+const LEGACY_QUARANTINE_SCOPE = "legacy-migrated";
+
+/** The user id whose storage is currently active, or null when anonymous. */
+let activeUserId = ANONYMOUS_SCOPE;
+
+/**
+ * Scope of the copy most recently read or written by loadResume/saveResume.
+ * Used to refuse pushing a resume that was loaded under a different account.
+ */
+let resumeOriginScope = ANONYMOUS_SCOPE;
+
+const normalizeScopeId = (userId) => {
+  if (userId === null || userId === undefined) return null;
+
+  const id = String(userId).trim();
+
+  return id.length > 0 ? id : null;
+};
+
+/** The active user id, or null when no account is signed in. */
+export const getResumeScope = () => activeUserId;
+
+/** True only when a real account is signed in. */
+export const isAuthenticatedResumeScope = () => activeUserId !== null;
+
+/**
+ * Point resume storage at an account.
+ *
+ * `null` (or an empty value) selects the anonymous scope. Switching scope does
+ * NOT delete anything: each account's data stays at its own keys and becomes
+ * visible again when that account signs back in.
+ *
+ * Returns the scope that was active before the call.
+ */
+export const setResumeScope = (userId) => {
+  const previous = activeUserId;
+
+  activeUserId = normalizeScopeId(userId);
+
+  if (isAuthenticatedResumeScope()) {
+    runLegacyMigrationIfNeeded();
+  }
+
+  return previous;
+};
+
+/** Resolve every storage key for a scope. */
+const keysForScope = (userId) => {
+  const id = normalizeScopeId(userId);
+
+  if (id === null) {
+    return {
+      scope: ANONYMOUS_SCOPE,
+      canonical: RESUME_STORAGE_KEY,
+      legacy: [...RESUME_LEGACY_STORAGE_KEYS],
+      timestamp: RESUME_LOCAL_TIMESTAMP_KEY,
+    };
+  }
+
+  // `u` prefix guarantees a user namespace can never collide with the
+  // anonymous or quarantined namespaces.
+  const namespace = `u${id}`;
+
+  return {
+    scope: id,
+    canonical: `${RESUME_STORAGE_KEY}:${namespace}`,
+    legacy: RESUME_LEGACY_STORAGE_KEYS.map((key) => `${key}:${namespace}`),
+    timestamp: `${RESUME_LOCAL_TIMESTAMP_KEY}:${namespace}`,
+  };
+};
+
+/** Keys for the currently active scope. */
+const activeKeys = () => keysForScope(activeUserId);
+
+/* ------------------------------------------------------------------ *
+ * Legacy global key migration (runs at most once)
+ * ------------------------------------------------------------------ */
+
+/*
+ * The unscoped keys hold whatever was saved before accounts existed, or before
+ * this fix. There is no owner recorded inside a resume — the canonical schema
+ * has no user field — and the old `smartresume_user` cache is not ownership
+ * evidence: it is unauthenticated, editable, and pre-dates real accounts
+ * entirely. So ownership cannot be established safely.
+ *
+ * Rather than guess, the legacy payload is MOVED into an isolated namespace
+ * that no account reads. It is preserved for a future explicit "claim this
+ * resume" flow, and no user can inherit it by accident.
+ *
+ * Runs at most once, guarded by MIGRATION_MARKER_KEY.
+ */
+const runLegacyMigrationIfNeeded = () => {
+  const storage = getStorage();
+
+  if (!storage) return;
+
+  try {
+    if (storage.getItem(MIGRATION_MARKER_KEY)) {
+      return;
+    }
+
+    const legacyRaw = storage.getItem(RESUME_STORAGE_KEY);
+
+    if (!legacyRaw) {
+      // Nothing to quarantine. Mark it done so this is never scanned again.
+      storage.setItem(MIGRATION_MARKER_KEY, "none");
+
+      return;
+    }
+
+    const quarantine = keysForScope(LEGACY_QUARANTINE_SCOPE);
+    const legacyTimestamp = storage.getItem(RESUME_LOCAL_TIMESTAMP_KEY);
+
+    // Never clobber an existing quarantined copy.
+    if (storage.getItem(quarantine.canonical) === null) {
+      storage.setItem(quarantine.canonical, legacyRaw);
+
+      for (let index = 0; index < RESUME_LEGACY_STORAGE_KEYS.length; index += 1) {
+        const value = storage.getItem(RESUME_LEGACY_STORAGE_KEYS[index]);
+
+        if (value !== null && storage.getItem(quarantine.legacy[index]) === null) {
+          storage.setItem(quarantine.legacy[index], value);
+        }
+      }
+
+      // The timestamp belongs to the payload it describes, so it moves too.
+      if (legacyTimestamp !== null) {
+        storage.setItem(quarantine.timestamp, legacyTimestamp);
+      }
+    }
+
+    // Remove the un-scoped originals so they are no longer readable.
+    storage.removeItem(RESUME_STORAGE_KEY);
+
+    for (const key of RESUME_LEGACY_STORAGE_KEYS) {
+      storage.removeItem(key);
+    }
+
+    storage.removeItem(RESUME_LOCAL_TIMESTAMP_KEY);
+
+    storage.setItem(MIGRATION_MARKER_KEY, "quarantined");
+  } catch {
+    // A failed migration must never block sign-in. Leaving the legacy keys in
+    // place is the safe outcome: they stay owned by the anonymous scope and
+    // are still never shown to an authenticated account.
+  }
+};
+
+/**
+ * Read-only view of the quarantined pre-authentication resume.
+ * Exposed so a future explicit "claim" flow can offer it deliberately.
+ */
+export const getQuarantinedLegacyResume = () => {
+  const storage = getStorage();
+
+  if (!storage) return null;
+
+  try {
+    const raw = storage.getItem(keysForScope(LEGACY_QUARANTINE_SCOPE).canonical);
+
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== "object") return null;
+
+    return normalizeResume(parsed);
+  } catch {
+    return null;
+  }
+};
+
 /** Canonical contact fields, in canonical order. */
 export const CONTACT_FIELDS = [
   "name",
@@ -622,9 +823,17 @@ export const isEmptyResume = (resume) => {
 export const loadResume = () => {
   const storage = getStorage();
 
-  if (!storage) return createEmptyResume();
+  const scoped = activeKeys();
 
-  const keys = [RESUME_STORAGE_KEY, ...RESUME_LEGACY_STORAGE_KEYS];
+  if (!storage) {
+    resumeOriginScope = scoped.scope;
+
+    return createEmptyResume();
+  }
+
+  // Read only the ACTIVE scope's keys. Switching accounts therefore switches
+  // which bytes are visible, without deleting anything.
+  const keys = [scoped.canonical, ...scoped.legacy];
 
   for (const key of keys) {
     let raw;
@@ -647,8 +856,14 @@ export const loadResume = () => {
 
     if (!isPlainObject(parsed)) continue;
 
+    // Remember which account this copy belongs to, so a later push cannot
+    // send it to a different account's server record.
+    resumeOriginScope = scoped.scope;
+
     return normalizeResume(parsed);
   }
+
+  resumeOriginScope = scoped.scope;
 
   return createEmptyResume();
 };
@@ -674,6 +889,7 @@ export const saveResume = (resume) => {
     normalized.id === "" ? { ...normalized, id: createId() } : normalized;
   const payload = JSON.stringify(canonical);
   const storage = getStorage();
+  const scoped = activeKeys();
 
   if (!storage) {
     return {
@@ -684,12 +900,12 @@ export const saveResume = (resume) => {
   }
 
   try {
-    storage.setItem(RESUME_STORAGE_KEY, payload);
+    storage.setItem(scoped.canonical, payload);
   } catch (error) {
     return { ok: false, resume: canonical, error };
   }
 
-  for (const key of RESUME_LEGACY_STORAGE_KEYS) {
+  for (const key of scoped.legacy) {
     try {
       storage.setItem(key, payload);
     } catch {
@@ -697,9 +913,11 @@ export const saveResume = (resume) => {
     }
   }
 
-  // Record when this device last saved, so a later cloud pull can tell
-  // whether the server copy or this copy is newer.
+  // Record when THIS account last saved on this device, so a later cloud pull
+  // compares this account's local time against this account's server time.
   writeLocalUpdatedAt(Date.now());
+
+  resumeOriginScope = scoped.scope;
 
   return { ok: true, resume: canonical, error: null };
 };
@@ -774,14 +992,14 @@ const nowIso = () => new Date().toISOString();
  * Local timestamp helpers (last-write-wins tie-breaker)
  * ------------------------------------------------------------------ */
 
-/** Epoch ms of the last local save, or 0 when there is none. */
+/** Epoch ms of the last local save for the ACTIVE scope, or 0 when none. */
 const readLocalUpdatedAt = () => {
   const storage = getStorage();
 
   if (!storage) return 0;
 
   try {
-    const value = Number(storage.getItem(RESUME_LOCAL_TIMESTAMP_KEY));
+    const value = Number(storage.getItem(activeKeys().timestamp));
 
     return Number.isFinite(value) && value > 0 ? value : 0;
   } catch {
@@ -795,7 +1013,7 @@ const writeLocalUpdatedAt = (timestamp) => {
   if (!storage) return;
 
   try {
-    storage.setItem(RESUME_LOCAL_TIMESTAMP_KEY, String(timestamp));
+    storage.setItem(activeKeys().timestamp, String(timestamp));
   } catch {
     // Losing the timestamp only weakens the offline guard; it must never
     // prevent the resume itself from being saved.
@@ -831,6 +1049,12 @@ const serverUpdatedAtMs = (iso) => {
  *   "error"            unexpected failure; nothing touched
  */
 export const syncResumeFromServer = async () => {
+  // Only an authenticated scope has a server record to pull. The anonymous
+  // scope owns the un-scoped keys and must never touch an account.
+  if (!isAuthenticatedResumeScope()) {
+    return { ok: false, reason: "anonymous_scope", changed: false };
+  }
+
   setSyncState({ status: SYNC_STATUS_SYNCING, lastError: null });
 
   let result;
@@ -970,6 +1194,32 @@ export const syncResumeFromServer = async () => {
  * never blocks: the caller has already persisted locally.
  */
 export const syncResumeToServer = async (resume) => {
+  /*
+   * Push safety, in order:
+   *  1. No account signed in -> there is no record to write to. Refused.
+   *  2. The resume being pushed was last read or written under a DIFFERENT
+   *     account than the one now signed in. Refused, because sending it would
+   *     write one user's resume into another user's cloud record.
+   */
+  if (!isAuthenticatedResumeScope()) {
+    return {
+      ok: false,
+      reason: "anonymous_scope",
+      message: "Sign in before syncing a resume to your account.",
+    };
+  }
+
+  // Strict equality: a copy loaded while anonymous (origin null) is also
+  // refused once an account is active.
+  if (resumeOriginScope !== activeUserId) {
+    return {
+      ok: false,
+      reason: "scope_mismatch",
+      message:
+        "This resume belongs to a different account and was not uploaded.",
+    };
+  }
+
   const canonical = normalizeResume(resume);
 
   setSyncState({ status: SYNC_STATUS_SYNCING, lastError: null });

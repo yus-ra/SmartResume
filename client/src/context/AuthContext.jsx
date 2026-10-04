@@ -17,6 +17,7 @@ import {
 
 import {
   resetResumeSyncState,
+  setResumeScope,
   syncResumeFromServer,
 } from "../lib/resumeSchema";
 
@@ -98,6 +99,17 @@ const clearCachedUser = () => {
   }
 };
 
+/**
+ * Drop back to the anonymous resume namespace.
+ *
+ * This only changes WHICH keys are read. It never deletes anything: the signed
+ * out account's resume stays at its own scoped keys and becomes visible again
+ * when that account signs back in.
+ */
+const clearResumeScope = () => {
+  setResumeScope(null);
+};
+
 /* ------------------------------------------------------------------ */
 /* Provider                                                             */
 /* ------------------------------------------------------------------ */
@@ -124,6 +136,15 @@ export const AuthProvider = ({ children }) => {
 
   const applyUser = useCallback((nextUser) => {
     const shaped = shapeUser(nextUser);
+
+    /*
+     * Establish this account's resume namespace BEFORE the state update and
+     * before any sync is triggered. Everything downstream — loadResume(),
+     * saveResume(), the timestamp comparison and both sync directions —
+     * resolves its keys from the active scope, so getting the order wrong here
+     * is what allowed one account to read or overwrite another's resume.
+     */
+    setResumeScope(shaped.id);
 
     if (mounted.current) {
       setUser(shaped);
@@ -164,11 +185,14 @@ export const AuthProvider = ({ children }) => {
       // is a different situation and must not be reported as a sign-out.
       if (result.status === 401) {
         clearCachedUser();
+        clearResumeScope();
         setUser(null);
         setStatus("unauthenticated");
         return;
       }
 
+      // No session could be established, so no account namespace applies.
+      clearResumeScope();
       setStatus("unavailable");
     })();
 
@@ -225,6 +249,7 @@ export const AuthProvider = ({ children }) => {
    */
   const logout = useCallback(async () => {
     clearCachedUser();
+    clearResumeScope();
     setUser(null);
     setStatus("unauthenticated");
 
