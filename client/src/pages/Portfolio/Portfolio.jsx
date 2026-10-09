@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import {
   ArrowLeft,
   Check,
-  Copy,
   ExternalLink,
   Mail,
   Plus,
@@ -155,18 +154,8 @@ const runPortfolioMigrationIfNeeded = () => {
 };
 
 /* =========================================================
-   HELPERS
-   ========================================================= */
-
-const createSlug = (name = "") => {
-  return (
-    name
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "my-portfolio"
-  );
-};
+    HELPERS
+  ========================================================= */
 
 const cleanUrl = (url = "") => {
   const value = url.trim();
@@ -216,8 +205,6 @@ const Portfolio = () => {
   const [activeTab, setActiveTab] = useState("editor");
 
   const [saved, setSaved] = useState(false);
-
-  const [copied, setCopied] = useState(false);
 
   /* =======================================================
      LOAD DATA
@@ -307,12 +294,8 @@ const Portfolio = () => {
 
   const education = resume?.education || [];
 
-  const portfolioSlug = createSlug(portfolio.profile.name);
-
-  const portfolioUrl = `https://smartresume.app/portfolio/${portfolioSlug}`;
-
   /* =======================================================
-     PROFILE UPDATE
+      PROFILE UPDATE
   ======================================================= */
 
   const updateProfile = (field, value) => {
@@ -425,57 +408,7 @@ const Portfolio = () => {
   };
 
   /* =======================================================
-     PUBLISH / UNPUBLISH
-  ======================================================= */
-
-  const togglePublish = () => {
-    if (!portfolio.profile.name.trim()) {
-      alert("Please add your display name before publishing your portfolio.");
-
-      return;
-    }
-
-    if (!portfolio.profile.title.trim()) {
-      alert("Please add your tagline or professional title before publishing.");
-
-      return;
-    }
-
-    const nextPublished = !portfolio.published;
-
-    const updatedPortfolio = {
-      ...portfolio,
-      published: nextPublished,
-    };
-
-setPortfolio(updatedPortfolio);
-
-      localStorage.setItem(
-        getPortfolioStorageKey(),
-        JSON.stringify(updatedPortfolio),
-      );
-    };
-
-  /* =======================================================
-     COPY PORTFOLIO LINK
-  ======================================================= */
-
-  const copyPortfolioLink = async () => {
-    try {
-      await navigator.clipboard.writeText(portfolioUrl);
-
-      setCopied(true);
-
-      setTimeout(() => {
-        setCopied(false);
-      }, 2000);
-    } catch (error) {
-      console.error("Could not copy portfolio link:", error);
-    }
-  };
-
-  /* =======================================================
-     RENDER
+      RENDER
   ======================================================= */
 
   return (
@@ -513,22 +446,10 @@ setPortfolio(updatedPortfolio);
                 </Link>
 
                 <div>
-                  <h1 className="text-lg sm:text-xl font-bold text-[#0F172A]">
-                    Portfolio Builder
-                  </h1>
-
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        portfolio.published ? "bg-emerald-500" : "bg-slate-400"
-                      }`}
-                    />
-
-                    <span className="text-xs text-[#64748B]">
-                      {portfolio.published ? "Published" : "Draft"}
-                    </span>
-                  </div>
-                </div>
+                <h1 className="text-lg sm:text-xl font-bold text-[#0F172A]">
+                  Portfolio Builder
+                </h1>
+              </div>
               </div>
 
               {/* RIGHT */}
@@ -572,25 +493,14 @@ setPortfolio(updatedPortfolio);
                       <Check size={16} />
                       Saved
                     </>
-                  ) : (
-                    <>
-                      <Save size={16} />
-                      Save
-                    </>
-                  )}
-                </button>
-
-                {/* PUBLISH */}
-
-                <button
-                  onClick={togglePublish}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2563EB] text-white text-sm font-semibold hover:bg-[#1D4ED8] transition"
-                >
-                  <Globe size={16} />
-
-                  {portfolio.published ? "Unpublish" : "Publish"}
-                </button>
-              </div>
+                   ) : (
+                     <>
+                       <Save size={16} />
+                       Save
+                     </>
+                   )}
+                 </button>
+               </div>
             </div>
           </div>
         </header>
@@ -961,25 +871,6 @@ setPortfolio(updatedPortfolio);
                       See how your portfolio looks.
                     </p>
                   </div>
-
-                  {portfolio.published && (
-                    <button
-                      onClick={copyPortfolioLink}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#F1F5F9] text-[#334155] text-xs font-semibold hover:bg-[#E2E8F0] transition"
-                    >
-                      {copied ? (
-                        <>
-                          <Check size={14} />
-                          Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={14} />
-                          Copy Link
-                        </>
-                      )}
-                    </button>
-                  )}
                 </div>
 
                 <div

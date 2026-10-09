@@ -13,6 +13,7 @@ import {
   login as loginRequest,
   logout as logoutRequest,
   register as registerRequest,
+  updateProfile as updateProfileRequest,
 } from "../lib/api";
 
 import {
@@ -86,8 +87,12 @@ const readCachedUser = () => {
 const writeCachedUser = (user) => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+
+    return { ok: true };
   } catch (error) {
     console.error("Could not cache the profile:", error);
+
+    return { ok: false, error: "Could not cache the profile." };
   }
 };
 
@@ -192,7 +197,9 @@ export const AuthProvider = ({ children }) => {
       }
 
       // No session could be established, so no account namespace applies.
+      clearCachedUser();
       clearResumeScope();
+      setUser(null);
       setStatus("unavailable");
     })();
 
@@ -265,43 +272,42 @@ export const AuthProvider = ({ children }) => {
   /*
    * Edit the signed-in user's profile.
    *
-   * This writes the local `smartresume_user` cache only. There is no profile
-   * endpoint yet, so these changes are NOT synced to the server and are
-   * labelled as such in Settings. Syncing profiles is future work.
+   * The server is authoritative: the PATCH endpoint validates and persists
+   * the change to MongoDB, and the returned public user replaces local state.
+   * A failed request must NOT update the cache or the React state — the
+   * caller keeps its edited form values and shows the returned error instead.
    */
   const updateProfile = useCallback(
-    (updates = {}) => {
-      setUser((current) => {
-        if (!current) {
-          return current;
-        }
+    async (updates = {}) => {
+      if (!user) {
+        return { ok: false, error: "No profile to update." };
+      }
 
-        const firstName =
-          updates.firstName === undefined
-            ? current.firstName
-            : updates.firstName;
-
-        const surname =
-          updates.surname === undefined ? current.surname : updates.surname;
-
-        const email =
-          updates.email === undefined ? current.email : updates.email;
-
-        const updated = shapeUser({
-          id: current.id,
-          firstName,
-          surname,
-          email,
-        });
-
-        writeCachedUser(updated);
-
-        return updated;
+      const result = await updateProfileRequest({
+        firstName: updates.firstName,
+        surname: updates.surname,
+        email: updates.email,
       });
 
-      return user;
+      if (!result.ok) {
+        return {
+          ok: false,
+          status: result.status,
+          error: result.error,
+          message: result.message,
+          fields: result.fields,
+        };
+      }
+
+      const serverUser = result.data?.user;
+
+      if (serverUser) {
+        applyUser(serverUser);
+      }
+
+      return { ok: true };
     },
-    [user],
+    [user, applyUser],
   );
 
   const value = useMemo(

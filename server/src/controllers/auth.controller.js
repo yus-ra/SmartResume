@@ -6,7 +6,7 @@ import {
   SESSION_COOKIE_NAME,
   sessionCookieOptions,
 } from "../config/env.js";
-import { validateLogin, validateRegistration } from "../lib/validation.js";
+import { validateLogin, validateProfileUpdate, validateRegistration } from "../lib/validation.js";
 import { ensureDatabase } from "../middleware/requireDatabase.js";
 
 /*
@@ -136,6 +136,58 @@ export function logout(_req, res) {
 
 export function me(req, res) {
   return res.status(200).json({ user: req.user.toPublicJSON() });
+}
+
+/* ------------------------------------------------------------------ */
+/* PATCH /api/auth/me                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Update the signed-in user's profile.
+ *
+ * The session identity is authoritative. Nothing in the request body can
+ * change which account is updated, and only firstName, surname and email are
+ * writable. Password, role, timestamps and resume/portfolio data are never
+ * touched by this endpoint.
+ */
+export async function updateProfile(req, res) {
+  const { valid, errors, data } = validateProfileUpdate(req.body);
+
+  if (!valid) {
+    return res.status(400).json({
+      error: "validation_failed",
+      message: "Please correct the highlighted fields.",
+      fields: errors,
+    });
+  }
+
+  if (!ensureDatabase(res)) {
+    return;
+  }
+
+  const user = req.user;
+
+  // Reject an email already owned by another account. The current user's own
+  // existing email is allowed — that is a no-op save, not a conflict.
+  if (data.email !== user.email) {
+    const existing = await User.findOne({ email: data.email });
+
+    if (existing && existing._id.toString() !== user._id.toString()) {
+      return res.status(409).json({
+        error: "email_taken",
+        message: "An account with that email already exists.",
+        fields: { email: "An account with that email already exists." },
+      });
+    }
+  }
+
+  user.firstName = data.firstName;
+  user.surname = data.surname;
+  user.email = data.email;
+
+  await user.save();
+
+  return res.status(200).json({ user: user.toPublicJSON() });
 }
 
 /*

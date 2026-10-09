@@ -228,7 +228,7 @@ const Dashboard = () => {
      empty state is shown instead of misleading zeros.
   ======================================================= */
 
-  const [resume] = useState(() => {
+  const [resume, setResume] = useState(() => {
     const loaded = loadResume();
 
     return isEmptyResume(loaded) ? null : loaded;
@@ -245,7 +245,17 @@ const Dashboard = () => {
 
   const [sync, setSync] = useState(() => getResumeSyncState());
 
-  useEffect(() => subscribeToResumeSync(setSync), []);
+  useEffect(() => {
+    return subscribeToResumeSync((state) => {
+      setSync(state);
+
+      if (state.status === "synced") {
+        const loaded = loadResume();
+
+        setResume(isEmptyResume(loaded) ? null : loaded);
+      }
+    });
+  }, []);
 
   const syncInfo = describeSync(sync);
   const SyncIcon = syncInfo.icon;

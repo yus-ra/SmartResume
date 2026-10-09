@@ -67,7 +67,7 @@ const Settings = () => {
     setError("");
   };
 
-  const handleSave = (event) => {
+  const handleSave = async (event) => {
     event.preventDefault();
 
     // ========================================
@@ -94,18 +94,24 @@ const Settings = () => {
 
     // ========================================
     // SAVE
-      // Casing is never altered: only the values
+    // Casing is never altered: only the values
     // are trimmed.
     // ========================================
 
-    updateProfile({
+    const result = await updateProfile({
       firstName,
       surname: form.surname.trim(),
       email,
     });
 
-    setError("");
-    setSaved(true);
+    if (result.ok) {
+      setError("");
+      setSaved(true);
+    } else {
+      // The server is authoritative. A failed request must not overwrite
+      // local state; the edited form values stay in place for correction.
+      setError(result.message || result.error || "Could not save profile changes.");
+    }
   };
 
   const handleLogout = () => {
@@ -230,8 +236,7 @@ const Settings = () => {
                 </div>
 
                 <p className="text-xs text-[#94A3B8]">
-                  Profile changes are saved locally in this browser and are
-                  not yet synced to a server.
+                  Profile changes are saved to your SmartResume account.
                 </p>
               </form>
             </section>

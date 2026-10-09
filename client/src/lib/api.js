@@ -130,6 +130,20 @@ export function logout() {
   return request("/api/auth/logout", { method: "POST" });
 }
 
+/**
+ * Update the signed-in user's profile on the server.
+ *
+ * Only firstName, surname and email are sent. The server validates and
+ * persists the change to MongoDB; the returned user is the authoritative
+ * public shape and should be used to update local state.
+ */
+export function updateProfile({ firstName, surname, email } = {}) {
+  return request("/api/auth/me", {
+    method: "PATCH",
+    body: { firstName, surname, email },
+  });
+}
+
 export { API_BASE_URL, REQUEST_TIMEOUT_MS };
 
 /* ------------------------------------------------------------------ */

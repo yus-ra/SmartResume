@@ -57,6 +57,36 @@ export function validateRegistration(body) {
 }
 
 /**
+ * Validate an authenticated profile-update payload.
+ *
+ * Allowed writable fields are firstName, surname and email only. The caller
+ * (req.user) supplies the identity; nothing in the body can override it.
+ */
+export function validateProfileUpdate(body) {
+  const errors = {};
+
+  const firstName = readString(body?.firstName, 60);
+  const surname = readString(body?.surname, 60);
+  const email = normaliseEmail(body?.email);
+
+  if (!firstName) {
+    errors.firstName = "First name is required.";
+  }
+
+  if (!isValidEmail(email)) {
+    errors.email = "Enter a valid email address.";
+  }
+
+  const valid = Object.keys(errors).length === 0;
+
+  return {
+    valid,
+    errors,
+    data: valid ? { firstName, surname, email } : null,
+  };
+}
+
+/**
  * Login validates presence only — never the password policy — so an existing
  * account with an older policy can still sign in.
  */

@@ -5,6 +5,7 @@ import {
   logout,
   me,
   register,
+  updateProfile,
 } from "../controllers/auth.controller.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireDatabase } from "../middleware/requireDatabase.js";
@@ -29,5 +30,6 @@ router.post("/login", login);
 router.post("/logout", logout);
 
 router.get("/me", requireDatabase, requireAuth, me);
+router.patch("/me", requireDatabase, requireAuth, updateProfile);
 
 export default router;
