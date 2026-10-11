@@ -22,8 +22,7 @@ import { ensureDatabase } from "../middleware/requireDatabase.js";
  * Auth controller.
  *
  * Two rules are deliberate and should not be relaxed:
- *  1. Responses never reveal whether an email is registered. Login failure
- *     returns one generic message whether the user is missing or the
+ *  1. Login failure returns one generic message whether the user is missing or the
  *     password is wrong.
  *  2. Passwords are never echoed, logged, or returned.
  */
@@ -207,8 +206,9 @@ export async function updateProfile(req, res) {
  * Issue a password-reset token for the supplied email.
  *
  * The response is identical whether or not the email is registered, so this
- * endpoint cannot be used to enumerate accounts. The reset link is dispatched
- * by email; when SMTP is not configured it is printed to the server console.
+ * endpoint cannot be used to enumerate accounts. A token is generated and
+ * dispatched only when the account exists; for an unknown email the same 200
+ * is returned without doing anything, so a caller cannot distinguish the two.
  */
 export async function forgotPassword(req, res) {
   const { valid, errors, data } = validateForgotPassword(req.body);
@@ -225,8 +225,9 @@ export async function forgotPassword(req, res) {
     return;
   }
 
-  // Always return the same shape regardless of whether the account exists,
-  // so a timing or status difference cannot reveal registration state.
+  // Look the user up, but never reveal the outcome. A token is generated and
+  // dispatched only for a real account; for an unknown email the same 200 is
+  // returned without doing anything, so timing and status cannot be probed.
   const user = await User.findOne({ email: data.email });
 
   if (user) {
@@ -261,7 +262,7 @@ export async function forgotPassword(req, res) {
   }
 
   return res.status(200).json({
-    message: "If that email is registered, a reset link has been sent.",
+    message: "If an account with that email exists, a reset link has been sent.",
   });
 }
 

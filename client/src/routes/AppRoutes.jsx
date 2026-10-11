@@ -11,6 +11,7 @@ import JobMatchResults from "../pages/JobMatch/JobMatchResults";
 import Portfolio from "../pages/Portfolio/Portfolio";
 import Settings from "../pages/Settings/Settings";
 import ProtectedRoute from "./ProtectedRoute";
+import ResetPassword from "../pages/Auth/ResetPassword";
 
 const AppRoutes = () => {
   return (
@@ -18,7 +19,7 @@ const AppRoutes = () => {
       <Route path="/" element={<App />} />
       <Route path="/register" element={<Register />} />
       <Route path="/login" element={<Login />} />
-
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route
         path="/dashboard"
         element={
@@ -75,7 +76,6 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
-
       <Route
         path="/settings"
         element={
@@ -84,7 +84,6 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
-
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

@@ -2,14 +2,24 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LogoIcon } from "../../components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
+import { forgotPassword } from "../../lib/api";
 
 const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
+
+  // Main form states
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Forgot password modal states
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetMessage, setResetMessage] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,7 +31,6 @@ const Login = () => {
     setError("");
     setLoading(true);
 
-    // Credentials are verified by the server; nothing is derived locally.
     const result = await login({
       email: form.email.trim(),
       password: form.password,
@@ -38,6 +47,50 @@ const Login = () => {
     }
 
     navigate("/dashboard");
+  };
+
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+
+    const email = resetEmail.trim();
+
+    if (!email) {
+      setResetError("Email is required.");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setResetError("Enter a valid email address.");
+      return;
+    }
+
+    setResetError("");
+    setResetMessage("");
+    setResetLoading(true);
+
+    // Call the API function which returns a result object
+    const result = await forgotPassword(email);
+
+    setResetLoading(false);
+
+    if (!result.ok) {
+      setResetError(
+        result.message || "Could not request a reset. Please try again.",
+      );
+      return;
+    }
+
+    // Success message
+    setResetMessage(
+      "If an account with that email exists, a reset link has been sent. Check your server console!",
+    );
+  };
+
+  const closeResetModal = () => {
+    setShowResetModal(false);
+    setResetEmail("");
+    setResetMessage("");
+    setResetError("");
   };
 
   return (
@@ -186,6 +239,10 @@ const Login = () => {
                   </label>
                   <button
                     type="button"
+                    onClick={() => {
+                      setShowResetModal(true);
+                      setResetEmail(form.email);
+                    }}
                     className="text-xs text-[#2563EB] font-medium hover:underline"
                   >
                     Forgot Password?
@@ -229,30 +286,6 @@ const Login = () => {
                   "Login →"
                 )}
               </button>
-
-              {/* Divider */}
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-[#E2E8F0]" />
-                <span className="text-xs text-[#94A3B8]">or continue with</span>
-                <div className="flex-1 h-px bg-[#E2E8F0]" />
-              </div>
-
-              {/* OAuth stubs */}
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { icon: "G", label: "Google", bg: "#fff" },
-                  { icon: "in", label: "LinkedIn", bg: "#fff" },
-                ].map(({ icon, label }) => (
-                  <button
-                    key={label}
-                    type="button"
-                    className="flex items-center justify-center gap-2 border border-[#E2E8F0] rounded-xl py-2.5 text-sm font-medium text-[#475569] hover:border-[#2563EB]/40 hover:bg-[#EFF6FF] transition-all"
-                  >
-                    <span className="font-bold text-base">{icon}</span>
-                    {label}
-                  </button>
-                ))}
-              </div>
             </form>
 
             <p className="text-center text-sm text-[#94A3B8] mt-6">
@@ -267,6 +300,99 @@ const Login = () => {
           </div>
         </div>
       </div>
+
+      {/* ===========================================================
+          FORGOT PASSWORD MODAL
+      =========================================================== */}
+
+      {showResetModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={closeResetModal}
+        >
+          <div
+            className="bg-white rounded-2xl border border-[#E2E8F0] shadow-xl w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-[#0F172A]">
+                Reset your password
+              </h2>
+              <button
+                onClick={closeResetModal}
+                className="text-[#94A3B8] hover:text-[#475569] text-sm w-7 h-7 rounded-lg hover:bg-[#F1F5F9] flex items-center justify-center"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-sm text-[#64748B] mb-5">
+              Enter the email associated with your account and we will send you
+              a link to reset your password.
+            </p>
+
+            {resetMessage && (
+              <div className="bg-[#F0FDF4] border border-[#BBF7D0] text-[#16A34A] text-sm px-4 py-3 rounded-xl mb-5 flex items-start gap-2">
+                <span>✓</span>
+                <span>{resetMessage}</span>
+              </div>
+            )}
+
+            {resetError && (
+              <div className="bg-[#FEF2F2] border border-[#FECACA] text-[#EF4444] text-sm px-4 py-3 rounded-xl mb-5 flex items-start gap-2">
+                <span>⚠</span>
+                <span>{resetError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleForgotSubmit} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#0F172A] mb-1.5 uppercase tracking-wide">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  placeholder="jordan@email.com"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  autoFocus
+                  className="w-full border border-[#E2E8F0] rounded-xl px-4 py-3 text-sm text-[#0F172A] placeholder:text-[#94A3B8] outline-none transition-all focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={resetLoading}
+                className="w-full font-semibold text-white py-3 rounded-xl shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5 text-sm disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                style={{
+                  background: "linear-gradient(135deg,#2563EB,#1D4ED8)",
+                }}
+              >
+                {resetLoading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    Sending…
+                  </>
+                ) : (
+                  "Send reset link"
+                )}
+              </button>
+            </form>
+
+            <p className="text-center text-xs text-[#94A3B8] mt-5">
+              Remember your password?{" "}
+              <button
+                type="button"
+                onClick={closeResetModal}
+                className="text-[#2563EB] font-semibold hover:underline"
+              >
+                Back to login
+              </button>
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
