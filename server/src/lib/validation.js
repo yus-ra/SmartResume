@@ -112,3 +112,50 @@ export function validateLogin(body) {
     data: valid ? { email, password } : null,
   };
 }
+
+/**
+ * Validate a password-reset request payload.
+ *
+ * The email is the only input; the token is generated server-side.
+ */
+export function validateForgotPassword(body) {
+  const errors = {};
+
+  const email = normaliseEmail(body?.email);
+
+  if (!isValidEmail(email)) {
+    errors.email = "Enter a valid email address.";
+  }
+
+  const valid = Object.keys(errors).length === 0;
+
+  return {
+    valid,
+    errors,
+    data: valid ? { email } : null,
+  };
+}
+
+/**
+ * Validate a password-reset completion payload.
+ *
+ * The token is supplied by the user (typically via a link), and the new
+ * password must meet the same minimum length as registration.
+ */
+export function validateResetPassword(body) {
+  const errors = {};
+
+  const password = typeof body?.password === "string" ? body.password : "";
+
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    errors.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+  }
+
+  const valid = Object.keys(errors).length === 0;
+
+  return {
+    valid,
+    errors,
+    data: valid ? { password } : null,
+  };
+}

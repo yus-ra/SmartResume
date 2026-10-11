@@ -21,6 +21,20 @@ export const env = {
   mongoUri: (process.env.MONGODB_URI || "").trim(),
 
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
+
+  /*
+   * Optional SMTP settings. When none are present, transactional email
+   * (password resets) is printed to the server console instead — this is
+   * intentional and documented, so the flow is testable without a mail
+   * server. Set these to deliver real email:
+   *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
+   */
+  smtpHost: (process.env.SMTP_HOST || "").trim(),
+  smtpPort: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
+  smtpUser: (process.env.SMTP_USER || "").trim(),
+  smtpPass: (process.env.SMTP_PASS || "").trim(),
+  smtpFrom: (process.env.SMTP_FROM || "").trim(),
+  smtpSecure: process.env.SMTP_SECURE === "true",
 };
 
 /*

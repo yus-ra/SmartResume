@@ -39,6 +39,25 @@ const userSchema = new mongoose.Schema(
       required: true,
       select: false,
     },
+
+    /*
+     * Password reset state.
+     *
+     * `resetPasswordToken` is stored as the SHA-256 hex of the raw token sent
+     * to the user, so a database leak does not directly expose a usable
+     * credential. The raw token is single-use and time-boxed.
+     */
+    resetPasswordToken: {
+      type: String,
+      default: null,
+      select: false,
+    },
+
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
+      select: false,
+    },
   },
   {
     timestamps: true, // createdAt / updatedAt

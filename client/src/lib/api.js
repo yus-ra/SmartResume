@@ -145,6 +145,35 @@ export function updateProfile({ firstName, surname, email } = {}) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Password recovery endpoints                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Request a password-reset link for the supplied email.
+ *
+ * The response is intentionally identical whether or not the email is
+ * registered, so this endpoint cannot be used to enumerate accounts.
+ */
+export function forgotPassword(email) {
+  return request("/api/auth/forgot-password", {
+    method: "POST",
+    body: { email },
+  });
+}
+
+/**
+ * Complete a password reset using a token issued by `forgotPassword`.
+ *
+ * `token` comes from the reset link; `password` is the new password.
+ */
+export function resetPassword(token, password) {
+  return request("/api/auth/reset-password", {
+    method: "POST",
+    body: { token, password },
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /* Portfolio endpoints                                                  */
 /* ------------------------------------------------------------------ */
 

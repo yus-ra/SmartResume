@@ -1,10 +1,12 @@
 import { Router } from "express";
 
 import {
+  forgotPassword,
   login,
   logout,
   me,
   register,
+  resetPassword,
   updateProfile,
 } from "../controllers/auth.controller.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -26,6 +28,16 @@ const router = Router();
  */
 router.post("/register", register);
 router.post("/login", login);
+
+/*
+ * Forgot-password and reset-password are NOT gated here: each validates its
+ * payload first and only then reports an unavailable database via
+ * `ensureDatabase`, so a malformed request is answered 400 even while MongoDB
+ * is down. Reset is deliberately NOT gated by `requireAuth`: the whole point
+ * is to recover access without a session.
+ */
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
 
 router.post("/logout", logout);
 
