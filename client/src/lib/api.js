@@ -144,6 +144,46 @@ export function updateProfile({ firstName, surname, email } = {}) {
   });
 }
 
+/* ------------------------------------------------------------------ */
+/* Portfolio endpoints                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Fetch the account's portfolio.
+ *
+ * 200 -> `{ portfolio, activeTemplate, updatedAt }`
+ * 404 -> `{ portfolio: null, activeTemplate: 1 }` meaning nothing has been
+ *        saved server-side yet. This is NOT the same as an empty portfolio,
+ *        so callers must not overwrite local data on a 404.
+ */
+export function getPortfolio() {
+  return request("/api/portfolio");
+}
+
+/**
+ * Create or replace the account's portfolio.
+ *
+ * `portfolio` is sent verbatim; the canonical shape is owned by the
+ * Portfolio page, not by this layer.
+ */
+export function putPortfolio({ portfolio, activeTemplate } = {}) {
+  return request("/api/portfolio", {
+    method: "PUT",
+    body: { portfolio, activeTemplate },
+  });
+}
+
+/**
+ * Partially update the account's portfolio — used for fast template
+ * switches without rewriting the whole payload.
+ */
+export function patchPortfolio({ activeTemplate } = {}) {
+  return request("/api/portfolio", {
+    method: "PATCH",
+    body: { activeTemplate },
+  });
+}
+
 export { API_BASE_URL, REQUEST_TIMEOUT_MS };
 
 /* ------------------------------------------------------------------ */

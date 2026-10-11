@@ -12,11 +12,13 @@ import {
   Eye,
   Edit3,
   Globe,
+  AlertTriangle,
 } from "lucide-react";
 
 import Sidebar from "../../components/Navbar/Sidebar";
 
 import { loadResume, isEmptyResume, getResumeScope } from "../../lib/resumeSchema";
+import { getPortfolio, patchPortfolio, putPortfolio } from "../../lib/api";
 
 /* =========================================================
    THEMES
@@ -193,6 +195,9 @@ const getInitials = (name = "") => {
   return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
 };
 
+const isPlainObject = (value) =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 /* =========================================================
    PORTFOLIO COMPONENT
 ========================================================= */
@@ -206,64 +211,116 @@ const Portfolio = () => {
 
   const [saved, setSaved] = useState(false);
 
+  const [saveError, setSaveError] = useState("");
+
   /* =======================================================
-     LOAD DATA
+      LOAD DATA
   ======================================================= */
 
   useEffect(() => {
-    try {
-      runPortfolioMigrationIfNeeded();
+    let active = true;
 
-      const loadedResume = loadResume();
+    (async () => {
+      try {
+        runPortfolioMigrationIfNeeded();
 
-      const parsedResume = isEmptyResume(loadedResume) ? null : loadedResume;
+        const loadedResume = loadResume();
 
-      setResume(parsedResume);
+        const parsedResume = isEmptyResume(loadedResume) ? null : loadedResume;
 
-      const storedPortfolio = localStorage.getItem(
-        getPortfolioStorageKey(),
-      );
+        if (active) {
+          setResume(parsedResume);
+        }
 
-      const savedPortfolio = storedPortfolio
-        ? JSON.parse(storedPortfolio)
-        : null;
+        const storedPortfolio = localStorage.getItem(
+          getPortfolioStorageKey(),
+        );
 
-      const initialProfile = {
-        name:
-          savedPortfolio?.profile?.name || parsedResume?.contact?.name || "",
+        const savedPortfolio = storedPortfolio
+          ? JSON.parse(storedPortfolio)
+          : null;
 
-        title:
-          savedPortfolio?.profile?.title || parsedResume?.contact?.title || "",
+        const initialProfile = {
+          name:
+            savedPortfolio?.profile?.name || parsedResume?.contact?.name || "",
 
-        bio: savedPortfolio?.profile?.bio || parsedResume?.summary || "",
+          title:
+            savedPortfolio?.profile?.title || parsedResume?.contact?.title || "",
 
-        email:
-          savedPortfolio?.profile?.email || parsedResume?.contact?.email || "",
+          bio: savedPortfolio?.profile?.bio || parsedResume?.summary || "",
 
-        linkedin:
-          savedPortfolio?.profile?.linkedin ||
-          parsedResume?.contact?.linkedin ||
-          "",
+          email:
+            savedPortfolio?.profile?.email || parsedResume?.contact?.email || "",
 
-        github:
-          savedPortfolio?.profile?.github ||
-          parsedResume?.contact?.github ||
-          "",
-      };
+          linkedin:
+            savedPortfolio?.profile?.linkedin ||
+            parsedResume?.contact?.linkedin ||
+            "",
 
-      const initialProjects = Array.isArray(savedPortfolio?.projects)
-        ? savedPortfolio.projects
-        : [];
+          github:
+            savedPortfolio?.profile?.github ||
+            parsedResume?.contact?.github ||
+            "",
+        };
 
-      setPortfolio({
-        profile: initialProfile,
-        projects: initialProjects,
-        themeId: savedPortfolio?.themeId || 1,
-        published: Boolean(savedPortfolio?.published),
-      });
-    } catch (error) {
-      console.error("Could not load portfolio data:", error);
-    }
+        const initialProjects = Array.isArray(savedPortfolio?.projects)
+          ? savedPortfolio.projects
+          : [];
+
+        const initial = {
+          profile: initialProfile,
+          projects: initialProjects,
+          themeId: savedPortfolio?.themeId || 1,
+          published: Boolean(savedPortfolio?.published),
+        };
+
+        if (active) {
+          setPortfolio(initial);
+        }
+
+        // The server is authoritative for the account's portfolio. A 404
+        // means nothing has been saved server-side yet, which is NOT the same
+        // as an empty portfolio, so the local copy is left untouched. A 5xx
+        // or network failure is likewise non-fatal: the local copy remains the
+        // working copy and the user can retry on save.
+        const result = await getPortfolio();
+
+        if (!active || !result.ok) {
+          return;
+        }
+
+        // A 404 carries no portfolio payload; do not clobber local edits.
+        if (result.status === 404) {
+          return;
+        }
+
+        const serverPortfolio = result.data?.portfolio;
+
+        if (!isPlainObject(serverPortfolio)) {
+          return;
+        }
+
+        if (active) {
+          setPortfolio({
+            profile: serverPortfolio.profile ?? initial.profile,
+            projects: Array.isArray(serverPortfolio.projects)
+              ? serverPortfolio.projects
+              : initial.projects,
+            themeId:
+              Number.isInteger(serverPortfolio.themeId) && serverPortfolio.themeId > 0
+                ? serverPortfolio.themeId
+                : initial.themeId,
+            published: Boolean(serverPortfolio.published),
+          });
+        }
+      } catch (error) {
+        console.error("Could not load portfolio data:", error);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   /* =======================================================
@@ -311,8 +368,12 @@ const Portfolio = () => {
     setSaved(false);
   };
 
-  /* =======================================================
-     THEME UPDATE
+/* =======================================================
+      THEME UPDATE
+
+      The selection is mirrored to the backend immediately so it survives
+      a refresh or a different device. A failure is non-fatal: the local
+      selection stays, and the next save retries it.
   ======================================================= */
 
   const updateTheme = (themeId) => {
@@ -322,6 +383,8 @@ const Portfolio = () => {
     }));
 
     setSaved(false);
+
+    void patchPortfolio({ activeTemplate: themeId });
   };
 
   /* =======================================================
@@ -386,25 +449,72 @@ const Portfolio = () => {
     setSaved(false);
   };
 
-  /* =======================================================
-     SAVE PORTFOLIO
+/* =======================================================
+      SAVE PORTFOLIO
+
+      Local storage is written first — it is durable immediately and is the
+      fallback if the server is unreachable. The server copy is then pushed
+      and the returned authoritative record is adopted, so a refresh or a
+      second device shows exactly what was saved. A failed server request
+      must NOT clear the local copy or claim success.
   ======================================================= */
 
-  const savePortfolio = () => {
+  const savePortfolio = async () => {
+    let localOk = false;
+
     try {
       localStorage.setItem(
         getPortfolioStorageKey(),
         JSON.stringify(portfolio),
       );
 
-      setSaved(true);
-
-      setTimeout(() => {
-        setSaved(false);
-      }, 2500);
+      localOk = true;
     } catch (error) {
-      console.error("Could not save portfolio:", error);
+      console.error("Could not save portfolio locally:", error);
     }
+
+    if (!localOk) {
+      setSaveError("Could not save to this device. Storage may be full.");
+      return;
+    }
+
+    setSaved(false);
+    setSaveError("");
+
+    const result = await putPortfolio({
+      portfolio,
+      activeTemplate: portfolio.themeId,
+    });
+
+    if (!result.ok) {
+      // The local copy is still intact; the user can retry. Do not claim
+      // success and do not discard the edited values.
+      setSaveError(result.message || result.error || "Could not sync your portfolio to the cloud.");
+      return;
+    }
+
+    const serverPortfolio = result.data?.portfolio;
+
+    if (isPlainObject(serverPortfolio)) {
+      setPortfolio((current) => ({
+        ...current,
+        profile: serverPortfolio.profile ?? current.profile,
+        projects: Array.isArray(serverPortfolio.projects)
+          ? serverPortfolio.projects
+          : current.projects,
+        themeId:
+          Number.isInteger(serverPortfolio.themeId) && serverPortfolio.themeId > 0
+            ? serverPortfolio.themeId
+            : current.themeId,
+        published: Boolean(serverPortfolio.published),
+      }));
+    }
+
+    setSaved(true);
+
+    setTimeout(() => {
+      setSaved(false);
+    }, 2500);
   };
 
   /* =======================================================
@@ -827,8 +937,7 @@ const Portfolio = () => {
                       <h3 className="font-semibold">Save your portfolio</h3>
 
                       <p className="text-sm text-[#CBD5E1] mt-1">
-                        Your portfolio is currently stored locally on this
-                        device.
+                        Saved to this device and backed up to your account.
                       </p>
                     </div>
 
@@ -849,6 +958,13 @@ const Portfolio = () => {
                       )}
                     </button>
                   </div>
+
+                  {saveError && (
+                    <div className="mt-4 flex items-start gap-2 bg-[#7F1D1D] border border-[#F87171] text-[#FEE2E2] text-sm px-4 py-3 rounded-xl">
+                      <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+                      <span>{saveError}</span>
+                    </div>
+                  )}
                 </div>
               </section>
 

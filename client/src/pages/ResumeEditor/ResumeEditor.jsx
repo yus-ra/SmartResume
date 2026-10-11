@@ -8,6 +8,7 @@ import {
   createId,
   syncResumeToServer,
 } from "../../lib/resumeSchema";
+import { patchPortfolio } from "../../lib/api";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -80,6 +81,22 @@ const ResumeEditor = () => {
 
     return savedTemplate ? Number(savedTemplate) : 1;
   });
+
+  /*
+   * Template selection is mirrored to the backend immediately so it survives
+   * a refresh or a different device. A failure is non-fatal: the local
+   * selection stays, and the next save retries it.
+   */
+  const selectTemplate = (templateId) => {
+    setActiveTemplate(templateId);
+
+    localStorage.setItem(
+      getTemplateStorageKey(),
+      templateId.toString(),
+    );
+
+    void patchPortfolio({ activeTemplate: templateId });
+  };
 
   // ========================================
   // ACTIVE SECTION
@@ -568,7 +585,7 @@ const ResumeEditor = () => {
                 {templates.map((template) => (
                   <button
                     key={template.id}
-                    onClick={() => setActiveTemplate(template.id)}
+                    onClick={() => selectTemplate(template.id)}
                     className="py-2 rounded-lg text-[10px] font-semibold border"
                     style={{
                       borderColor:
