@@ -35,6 +35,14 @@ export const env = {
   smtpPass: (process.env.SMTP_PASS || "").trim(),
   smtpFrom: (process.env.SMTP_FROM || "").trim(),
   smtpSecure: process.env.SMTP_SECURE === "true",
+
+  /*
+   * Optional Gemini API key. When absent the AI endpoints answer 503 and the
+   * app remains fully usable — the deterministic Job Match score is always the
+   * source of truth, and the AI explanation is purely advisory. The key is
+   * read server-side only and never reaches the client bundle.
+   */
+  geminiApiKey: (process.env.GEMINI_API_KEY || "").trim(),
 };
 
 /*

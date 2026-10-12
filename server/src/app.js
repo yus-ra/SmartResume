@@ -8,6 +8,7 @@ import { attachUser } from "./middleware/auth.js";
 import authRoutes from "./routes/auth.routes.js";
 import resumeRoutes from "./routes/resume.routes.js";
 import portfolioRoutes from "./routes/portfolio.routes.js";
+import aiRoutes from "./routes/ai.routes.js";
 
 export function createApp() {
   const app = express();
@@ -40,7 +41,8 @@ export function createApp() {
 
   app.use("/api/auth", authRoutes);
   app.use("/api/resume", resumeRoutes);
-app.use("/api/portfolio", portfolioRoutes);
+  app.use("/api/portfolio", portfolioRoutes);
+  app.use("/api/ai", aiRoutes);
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "not_found", message: "No such endpoint." });
   });

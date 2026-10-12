@@ -159,3 +159,84 @@ export function validateResetPassword(body) {
     data: valid ? { password } : null,
   };
 }
+
+/**
+ * Validate the advisory AI explanation request payload.
+ *
+ * Only the aggregated match data the client already computed is accepted.
+ * The server controls the prompt, so user ID, resume ID, API key, arbitrary
+ * prompt text, model name and system instructions are all rejected here.
+ */
+export function validateExplainMatch(body) {
+  const errors = {};
+
+  const jobTitle = readString(body?.jobTitle, 120);
+  const company = readString(body?.company, 120);
+  const jobDescription =
+    typeof body?.jobDescription === "string" ? body.jobDescription.trim() : "";
+
+  const matchScore = Number(body?.matchScore);
+
+  const matchedSkills = readStringArray(body?.matchedSkills, 30, 60);
+  const missingSkills = readStringArray(body?.missingSkills, 30, 60);
+
+  if (!jobDescription) {
+    errors.jobDescription = "A job description is required.";
+  }
+
+  if (jobDescription.length > 15000) {
+    errors.jobDescription = "Job description is too long.";
+  }
+
+  if (!Number.isInteger(matchScore) || matchScore < 0 || matchScore > 100) {
+    errors.matchScore = "Match score must be a whole number between 0 and 100.";
+  }
+
+  const valid = Object.keys(errors).length === 0;
+
+  return {
+    valid,
+    errors,
+    data: valid
+      ? {
+          jobTitle,
+          company,
+          jobDescription,
+          matchScore,
+          matchedSkills,
+          missingSkills,
+        }
+      : null,
+  };
+}
+
+/**
+ * Read a bounded array of trimmed strings. Non-array input, non-string items,
+ * empty items and items over the per-item limit are all dropped rather than
+ * throwing, so a malformed payload cannot crash validation.
+ */
+function readStringArray(value, maxItems, maxLength) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const out = [];
+
+  for (let i = 0; i < value.length; i += 1) {
+    if (out.length >= maxItems) {
+      break;
+    }
+
+    if (typeof value[i] !== "string") {
+      continue;
+    }
+
+    const trimmed = value[i].trim().slice(0, maxLength);
+
+    if (trimmed.length > 0) {
+      out.push(trimmed);
+    }
+  }
+
+  return out;
+}
