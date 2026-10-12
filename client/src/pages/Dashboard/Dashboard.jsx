@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import {
   FileText,
   Plus,
-  Sparkles,
   Globe,
   Target,
   Briefcase,
@@ -50,9 +49,9 @@ const actions = [
     to: "/import-resume",
   },
   {
-    icon: Sparkles,
-    label: "AI Analysis",
-    desc: "Improve your resume for ATS",
+    icon: FileText,
+    label: "Resume Analysis",
+    desc: "Review your resume structure, content, and key areas for improvement.",
     to: "/analysis",
   },
   {

@@ -1,17 +1,7 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { loadResume, isEmptyResume } from "../../lib/resumeSchema";
-import {
-  Target,
-  FileText,
-  CheckCircle2,
-  AlertCircle,
-  ArrowRight,
-  Sparkles,
-  Briefcase,
-  Search,
-  RotateCcw,
-} from "lucide-react";
+import { Target, FileText, Search } from "lucide-react";
 
 import Sidebar from "../../components/Navbar/Sidebar";
 
@@ -289,7 +279,7 @@ const JOB_TITLE_GROUPS = {
 
 /* =========================================================
    BUILD RESUME SEARCH TEXT
-   ========================================================= */
+========================================================= */
 
 function buildResumeText(resume) {
   return normalizeText(
@@ -326,7 +316,6 @@ function buildResumeText(resume) {
 
 function canonicalizeTerm(term) {
   const normalized = normalizeText(term);
-
   return TERM_ALIASES[normalized] || term.trim();
 }
 
@@ -340,12 +329,10 @@ function canonicalizeTerms(terms) {
 
 function extractSkills(jobDescription) {
   const normalizedJob = normalizeText(jobDescription);
-
   const detected = [];
 
   COMMON_SKILLS.forEach((skill) => {
     const normalizedSkill = normalizeText(skill);
-
     const pattern = new RegExp(
       `(^|\\s)${escapeRegex(normalizedSkill)}(?=\\s|$)`,
       "i",
@@ -365,12 +352,10 @@ function extractSkills(jobDescription) {
 
 function extractResumeSkills(resume) {
   const resumeText = buildResumeText(resume);
-
   const detected = [];
 
   COMMON_SKILLS.forEach((skill) => {
     const normalizedSkill = normalizeText(skill);
-
     const pattern = new RegExp(
       `(^|\\s)${escapeRegex(normalizedSkill)}(?=\\s|$)`,
       "i",
@@ -396,13 +381,11 @@ function extractResumeSkills(resume) {
 
 function detectJobCategory(jobTitle, jobDescription) {
   const source = normalizeText(`${jobTitle} ${jobDescription}`);
-
   let bestCategory = null;
   let bestScore = 0;
 
   Object.entries(JOB_TITLE_GROUPS).forEach(([category, titles]) => {
     let score = 0;
-
     titles.forEach((title) => {
       if (source.includes(normalizeText(title))) {
         score += 3;
@@ -490,9 +473,7 @@ function analyzeExperienceMatch(resume, jobDescription) {
     const entryText = normalizeText(
       [entry.role, entry.company, ...entry.bullets].join(" "),
     );
-
     const matches = jobWords.filter((word) => entryText.includes(word));
-
     return matches.length >= 2;
   });
 
@@ -514,7 +495,6 @@ function analyzeExperienceMatch(resume, jobDescription) {
 function analyzeKeywordMatch(resume, jobDescription) {
   const jobSkills = extractSkills(jobDescription);
   const resumeSkills = extractResumeSkills(resume);
-
   const normalizedResumeSkills = resumeSkills.map(normalizeText);
 
   const matched = jobSkills.filter((skill) =>
@@ -544,7 +524,6 @@ function analyzeKeywordMatch(resume, jobDescription) {
 
 function analyzeRequirements(jobDescription) {
   const normalized = normalizeText(jobDescription);
-
   const requirements = [];
 
   const patterns = [
@@ -552,10 +531,7 @@ function analyzeRequirements(jobDescription) {
       label: "Bachelor's degree",
       pattern: /bachelor|b\.?sc|b\.?a\.?|university degree/i,
     },
-    {
-      label: "Master's degree",
-      pattern: /master|m\.?sc|m\.?a\.?/i,
-    },
+    { label: "Master's degree", pattern: /master|m\.?sc|m\.?a\.?/i },
     {
       label: "Team collaboration",
       pattern: /collaborat|cross functional|team environment/i,
@@ -568,10 +544,7 @@ function analyzeRequirements(jobDescription) {
       label: "Problem solving",
       pattern: /problem solving|troubleshoot|analytical thinking/i,
     },
-    {
-      label: "Leadership",
-      pattern: /leadership|lead a team|mentor|supervis/i,
-    },
+    { label: "Leadership", pattern: /leadership|lead a team|mentor|supervis/i },
   ];
 
   patterns.forEach(({ label, pattern }) => {
@@ -589,7 +562,6 @@ function analyzeRequirements(jobDescription) {
 
 function analyzeSoftRequirements(resume, jobDescription) {
   const requirements = analyzeRequirements(jobDescription);
-
   const resumeText = buildResumeText(resume);
 
   const matched = requirements.filter((requirement) => {
@@ -641,35 +613,26 @@ function calculateMatchScore({ keywords, title, experience, requirements }) {
 ========================================================= */
 
 const JobMatch = () => {
+  const navigate = useNavigate();
+
   const [jobTitle, setJobTitle] = useState("");
   const [company, setCompany] = useState("");
   const [jobDescription, setJobDescription] = useState("");
-  const [hasAnalyzed, setHasAnalyzed] = useState(false);
 
   const storedResume = useMemo(() => {
-    // Read-only. loadResume() never writes, so opening this page cannot alter
-    // stored data. It also falls through a corrupt resumeData to a valid
-    // legacy cvData record instead of masking it. A resume with no content
-    // keeps the null sentinel so the honest "No Resume Found" state is shown.
     const loaded = loadResume();
-
     return isEmptyResume(loaded) ? null : loaded;
   }, []);
 
-  const analysis = useMemo(() => {
-    if (!hasAnalyzed || !storedResume || !jobDescription.trim()) {
-      return null;
-    }
+  const handleAnalyze = () => {
+    if (!jobDescription.trim() || !storedResume) return;
 
     const keywordAnalysis = analyzeKeywordMatch(storedResume, jobDescription);
-
     const titleAnalysis = analyzeTitleMatch(storedResume, jobTitle);
-
     const experienceAnalysis = analyzeExperienceMatch(
       storedResume,
       jobDescription,
     );
-
     const requirementAnalysis = analyzeSoftRequirements(
       storedResume,
       jobDescription,
@@ -684,48 +647,42 @@ const JobMatch = () => {
 
     const category = detectJobCategory(jobTitle, jobDescription);
 
-    return {
-      overall,
+    const analysis = {
+      overallScore: overall,
       category,
       keywordAnalysis,
       titleAnalysis,
       experienceAnalysis,
       requirementAnalysis,
+      matchedKeywords: keywordAnalysis.matched,
+      missingKeywords: keywordAnalysis.missing,
+      recommendations: [
+        keywordAnalysis.missing.length > 0
+          ? `Add missing keywords: ${keywordAnalysis.missing.slice(0, 5).join(", ")}`
+          : "Your resume matches the core required skills well.",
+        titleAnalysis.score < 70
+          ? "Consider tailoring your professional headline to better match the target job title."
+          : "Your professional title aligns well with the position.",
+      ],
     };
-  }, [hasAnalyzed, storedResume, jobTitle, jobDescription]);
 
-  const handleAnalyze = () => {
-    if (!jobDescription.trim()) return;
-
-    setHasAnalyzed(true);
-  };
-
-  const handleReset = () => {
-    setJobTitle("");
-    setCompany("");
-    setJobDescription("");
-    setHasAnalyzed(false);
+    navigate("/job-match/results", {
+      state: {
+        analysis,
+        jobTitle,
+        company,
+        jobDescription,
+      },
+    });
   };
 
   const resumeExists = Boolean(storedResume);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
-      {/* =====================================================
-          SIDEBAR
-      ===================================================== */}
-
       <Sidebar />
 
-      {/* =====================================================
-          PAGE CONTENT
-      ===================================================== */}
-
       <div className="ml-60 min-h-screen">
-        {/* ===================================================
-            HEADER
-        =================================================== */}
-
         <header className="bg-white border-b border-gray-100">
           <div className="px-12 py-8">
             <Link
@@ -737,7 +694,6 @@ const JobMatch = () => {
 
             <div className="mt-5">
               <h1 className="text-3xl font-bold text-gray-900">Job Match</h1>
-
               <p className="text-gray-500 mt-2 max-w-3xl">
                 Compare your resume with a job description to discover how well
                 your experience and skills align with the role.
@@ -746,31 +702,20 @@ const JobMatch = () => {
           </div>
         </header>
 
-        {/* ===================================================
-            MAIN
-        =================================================== */}
-
         <main className="px-12 py-10">
           <div className="max-w-[1400px] mx-auto">
             {!resumeExists ? (
-              /* =================================================
-                 NO RESUME
-              ================================================= */
-
               <div className="max-w-xl mx-auto bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center">
                 <div className="w-16 h-16 mx-auto rounded-2xl bg-blue-50 flex items-center justify-center">
                   <FileText size={30} className="text-blue-600" />
                 </div>
-
                 <h2 className="text-2xl font-bold text-gray-900 mt-5">
                   No Resume Found
                 </h2>
-
                 <p className="text-gray-500 mt-2 leading-6">
                   Create or import a resume before comparing it with a job
                   description.
                 </p>
-
                 <div className="flex flex-col sm:flex-row gap-3 justify-center mt-7">
                   <Link
                     to="/editor"
@@ -778,7 +723,6 @@ const JobMatch = () => {
                   >
                     Create Resume
                   </Link>
-
                   <Link
                     to="/import-resume"
                     className="px-5 py-3 rounded-xl border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition"
@@ -787,33 +731,23 @@ const JobMatch = () => {
                   </Link>
                 </div>
               </div>
-            ) : !analysis ? (
-              /* =================================================
-                 JOB INPUT
-              ================================================= */
-
+            ) : (
               <div className="grid xl:grid-cols-[1fr_360px] gap-8">
-                {/* JOB FORM */}
-
                 <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-9">
                   <div className="flex items-start gap-4 mb-8">
                     <div className="w-14 h-14 rounded-2xl bg-gray-900 flex items-center justify-center flex-shrink-0">
                       <Target size={25} className="text-white" />
                     </div>
-
                     <div>
                       <h2 className="text-2xl font-bold text-gray-900">
                         Add a Job Description
                       </h2>
-
                       <p className="text-gray-500 mt-1">
                         Paste the job posting you want to compare your resume
                         against.
                       </p>
                     </div>
                   </div>
-
-                  {/* JOB TITLE */}
 
                   <div className="mb-6">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -822,7 +756,6 @@ const JobMatch = () => {
                         (optional)
                       </span>
                     </label>
-
                     <input
                       type="text"
                       value={jobTitle}
@@ -832,8 +765,6 @@ const JobMatch = () => {
                     />
                   </div>
 
-                  {/* COMPANY */}
-
                   <div className="mb-6">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Company{" "}
@@ -841,7 +772,6 @@ const JobMatch = () => {
                         (optional)
                       </span>
                     </label>
-
                     <input
                       type="text"
                       value={company}
@@ -851,19 +781,15 @@ const JobMatch = () => {
                     />
                   </div>
 
-                  {/* JOB DESCRIPTION */}
-
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <label className="text-sm font-semibold text-gray-700">
                         Job Description
                       </label>
-
                       <span className="text-xs text-gray-400">
                         {jobDescription.length.toLocaleString()} characters
                       </span>
                     </div>
-
                     <textarea
                       value={jobDescription}
                       onChange={(event) => {
@@ -875,24 +801,10 @@ const JobMatch = () => {
                         }
                       }}
                       rows={17}
-                      placeholder={`Paste the full job description here...
-
-Example:
-
-We are looking for a Junior DevOps Engineer to join our engineering team.
-
-Requirements:
-• Experience with AWS
-• Knowledge of Docker and Kubernetes
-• Familiarity with Terraform
-• Strong Linux skills
-• Experience with CI/CD
-• Good communication and problem-solving skills`}
+                      placeholder="Paste the full job description here..."
                       className="w-full border border-gray-200 rounded-xl px-4 py-4 outline-none resize-y focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition text-gray-700 leading-6"
                     />
                   </div>
-
-                  {/* ANALYZE */}
 
                   <button
                     type="button"
@@ -905,31 +817,23 @@ Requirements:
                   </button>
                 </section>
 
-                {/* RIGHT COLUMN */}
-
                 <aside className="space-y-6">
-                  {/* RESUME CARD */}
-
                   <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-7">
                     <div className="flex items-start gap-4">
                       <div className="w-12 h-12 rounded-2xl bg-green-50 flex items-center justify-center">
                         <FileText size={23} className="text-green-600" />
                       </div>
-
                       <div>
                         <h3 className="font-bold text-gray-900">Your Resume</h3>
-
                         <p className="text-sm text-green-600 mt-1">
                           Ready to analyze
                         </p>
                       </div>
                     </div>
-
                     <p className="text-gray-500 mt-5 leading-6">
                       SmartResume will use the resume currently saved in your
                       editor when comparing it with the job description.
                     </p>
-
                     <Link
                       to="/editor"
                       className="mt-6 block text-center border border-gray-200 rounded-xl py-3 font-semibold text-gray-700 hover:bg-gray-50 transition"
@@ -937,368 +841,7 @@ Requirements:
                       View / Edit Resume
                     </Link>
                   </div>
-
-                  {/* WHAT YOU GET */}
-
-                  <div className="bg-gray-900 rounded-3xl p-7 text-white">
-                    <div className="flex items-center gap-3">
-                      <Sparkles size={20} className="text-blue-400" />
-
-                      <h3 className="font-bold">What you'll get</h3>
-                    </div>
-
-                    <div className="mt-6 space-y-5">
-                      <Feature
-                        icon={<Target size={18} />}
-                        title="Match Score"
-                        description="See how closely your resume aligns with the role."
-                      />
-
-                      <Feature
-                        icon={<Search size={18} />}
-                        title="Keywords"
-                        description="Identify important skills found or missing."
-                      />
-
-                      <Feature
-                        icon={<Briefcase size={18} />}
-                        title="Experience"
-                        description="See how your experience relates to the job."
-                      />
-
-                      <Feature
-                        icon={<Sparkles size={18} />}
-                        title="Recommendations"
-                        description="Get practical suggestions for improving your match."
-                      />
-                    </div>
-                  </div>
-
-                  {/* TIP */}
-
-                  <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-7">
-                    <div className="text-2xl mb-3">💡</div>
-
-                    <h3 className="font-bold text-gray-900 mb-2">Pro tip</h3>
-
-                    <p className="text-sm text-gray-500 leading-6">
-                      Paste the complete job description. Responsibilities,
-                      qualifications and preferred skills all provide useful
-                      matching signals.
-                    </p>
-                  </div>
                 </aside>
-              </div>
-            ) : (
-              /* =================================================
-                 RESULTS
-              ================================================= */
-
-              <div>
-                {/* RESULTS HEADER */}
-
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-7">
-                  <div>
-                    <Link
-                      to="/dashboard"
-                      className="text-sm text-gray-500 hover:text-gray-900"
-                    >
-                      ← Dashboard
-                    </Link>
-
-                    <h2 className="text-2xl font-bold text-gray-900 mt-2">
-                      Job Match Results
-                    </h2>
-
-                    {(jobTitle || company) && (
-                      <p className="text-gray-500 mt-1">
-                        {jobTitle}
-                        {jobTitle && company ? " · " : ""}
-                        {company}
-                      </p>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleReset}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-semibold hover:bg-white transition"
-                  >
-                    <RotateCcw size={16} />
-                    New Match
-                  </button>
-                </div>
-
-                {/* SCORE */}
-
-                <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
-                  <div className="grid lg:grid-cols-[230px_1fr] gap-10 items-center">
-                    <MatchScore score={analysis.overall} />
-
-                    <div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h2 className="text-2xl font-bold text-gray-900">
-                          Job Match Score
-                        </h2>
-
-                        {analysis.category && (
-                          <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold capitalize">
-                            {analysis.category} role
-                          </span>
-                        )}
-                      </div>
-
-                      <p className="text-gray-500 mt-3 leading-7 max-w-2xl">
-                        This score compares the job description with your saved
-                        resume using detected skills, role terminology,
-                        experience relevance and professional requirements.
-                      </p>
-
-                      <div className="grid sm:grid-cols-3 gap-4 mt-7">
-                        <MatchMini
-                          label="Keywords"
-                          score={analysis.keywordAnalysis.score}
-                        />
-
-                        <MatchMini
-                          label="Experience"
-                          score={analysis.experienceAnalysis.score}
-                        />
-
-                        <MatchMini
-                          label="Requirements"
-                          score={analysis.requirementAnalysis.score}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                {/* RESULTS GRID */}
-
-                <div className="grid lg:grid-cols-2 gap-6 mt-6">
-                  {/* MATCHING SKILLS */}
-
-                  <ResultCard
-                    title="Matching Skills"
-                    icon={<CheckCircle2 size={21} className="text-green-500" />}
-                  >
-                    {analysis.keywordAnalysis.matched.length ? (
-                      <div className="flex flex-wrap gap-2">
-                        {analysis.keywordAnalysis.matched.map((skill) => (
-                          <span
-                            key={skill}
-                            className="px-3 py-2 rounded-lg bg-green-50 text-green-700 text-sm font-medium"
-                          >
-                            ✓ {skill}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500">
-                        No direct skill matches were detected.
-                      </p>
-                    )}
-                  </ResultCard>
-
-                  {/* MISSING SKILLS */}
-
-                  <ResultCard
-                    title="Missing Skills"
-                    icon={<AlertCircle size={21} className="text-amber-500" />}
-                  >
-                    {analysis.keywordAnalysis.missing.length ? (
-                      <>
-                        <p className="text-sm text-gray-500 mb-4">
-                          Consider adding these only if you genuinely have the
-                          skill or experience.
-                        </p>
-
-                        <div className="flex flex-wrap gap-2">
-                          {analysis.keywordAnalysis.missing.map((skill) => (
-                            <span
-                              key={skill}
-                              className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm"
-                            >
-                              {skill}
-                            </span>
-                          ))}
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-green-600 font-medium">
-                        No missing technical skills were detected.
-                      </p>
-                    )}
-                  </ResultCard>
-
-                  {/* TITLE MATCH */}
-
-                  <ResultCard title="Professional Title">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-500">Your title</p>
-
-                        <p className="font-semibold text-gray-900 mt-1">
-                          {storedResume.contact.title || "Not provided"}
-                        </p>
-                      </div>
-
-                      <span className="text-2xl font-bold text-gray-900">
-                        {analysis.titleAnalysis.score}%
-                      </span>
-                    </div>
-
-                    <p className="text-sm text-gray-500 mt-5">
-                      {analysis.titleAnalysis.reason}
-                    </p>
-                  </ResultCard>
-
-                  {/* EXPERIENCE */}
-
-                  <ResultCard title="Experience Relevance">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-500">
-                          Relevant experience
-                        </p>
-
-                        <p className="text-2xl font-bold text-gray-900 mt-1">
-                          {analysis.experienceAnalysis.relevantEntries}
-                          <span className="text-base font-normal text-gray-400">
-                            {" "}
-                            / {analysis.experienceAnalysis.totalEntries}
-                          </span>
-                        </p>
-                      </div>
-
-                      <span className="text-2xl font-bold text-gray-900">
-                        {analysis.experienceAnalysis.score}%
-                      </span>
-                    </div>
-
-                    <p className="text-sm text-gray-500 mt-5">
-                      This measures how much terminology from the job
-                      description appears in your experience entries.
-                    </p>
-                  </ResultCard>
-
-                  {/* REQUIREMENTS */}
-
-                  <ResultCard title="Professional Requirements">
-                    {analysis.requirementAnalysis.matched.length ? (
-                      <div className="space-y-3">
-                        {analysis.requirementAnalysis.matched.map(
-                          (requirement) => (
-                            <div
-                              key={requirement}
-                              className="flex items-center gap-3"
-                            >
-                              <CheckCircle2
-                                size={18}
-                                className="text-green-500"
-                              />
-
-                              <span className="text-gray-700">
-                                {requirement}
-                              </span>
-                            </div>
-                          ),
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500">
-                        No additional requirements were matched.
-                      </p>
-                    )}
-
-                    {analysis.requirementAnalysis.missing.length > 0 && (
-                      <div className="mt-5 pt-5 border-t border-gray-100">
-                        <p className="text-sm font-semibold text-gray-700 mb-3">
-                          Not detected
-                        </p>
-
-                        <div className="space-y-3">
-                          {analysis.requirementAnalysis.missing.map(
-                            (requirement) => (
-                              <div
-                                key={requirement}
-                                className="flex items-center gap-3"
-                              >
-                                <AlertCircle
-                                  size={18}
-                                  className="text-amber-500"
-                                />
-
-                                <span className="text-gray-600">
-                                  {requirement}
-                                </span>
-                              </div>
-                            ),
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </ResultCard>
-
-                  {/* RECOMMENDATIONS */}
-
-                  <ResultCard title="Recommendations">
-                    <div className="space-y-4">
-                      {analysis.keywordAnalysis.missing.length > 0 && (
-                        <Recommendation
-                          title="Review missing job keywords"
-                          text="If you genuinely have these skills, make sure they appear clearly in the appropriate section of your resume."
-                        />
-                      )}
-
-                      {analysis.titleAnalysis.score < 60 && (
-                        <Recommendation
-                          title="Align your professional title"
-                          text="If appropriate, make your resume title clearer and closer to the role you are applying for."
-                        />
-                      )}
-
-                      {analysis.experienceAnalysis.score < 60 && (
-                        <Recommendation
-                          title="Strengthen relevant experience"
-                          text="Emphasize experience and achievements that directly demonstrate the capabilities requested in the job description."
-                        />
-                      )}
-
-                      {analysis.requirementAnalysis.score < 70 && (
-                        <Recommendation
-                          title="Address job requirements"
-                          text="Review the requirements you already satisfy and make that evidence easier for a recruiter to find."
-                        />
-                      )}
-
-                      {analysis.overall >= 80 && (
-                        <Recommendation
-                          title="Review your remaining gaps"
-                          text="Your resume contains many signals that overlap with this job description. Review the remaining gaps and make sure every claim is accurate and supportable."
-                        />
-                      )}
-                    </div>
-                  </ResultCard>
-                </div>
-
-                {/* EDIT BUTTON */}
-
-                <div className="mt-8 flex justify-center">
-                  <Link
-                    to="/editor"
-                    className="inline-flex items-center gap-2 px-5 py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition"
-                  >
-                    Review / Edit Resume
-                    <ArrowRight size={17} />
-                  </Link>
-                </div>
-
-                <p className="text-center text-sm text-gray-400 mt-7">
-                  Job Match compares your resume with the supplied job
-                  description. It does not guarantee hiring outcomes.
-                </p>
               </div>
             )}
           </div>
@@ -1307,147 +850,5 @@ Requirements:
     </div>
   );
 };
-
-/* =========================================================
-   FEATURE
-========================================================= */
-
-function Feature({ icon, title, description }) {
-  return (
-    <div className="flex gap-3">
-      <div className="mt-0.5">{icon}</div>
-
-      <div>
-        <p className="font-semibold text-sm">{title}</p>
-
-        <p className="text-gray-400 text-xs leading-5 mt-1">{description}</p>
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================
-   MATCH SCORE
-========================================================= */
-
-function MatchScore({ score }) {
-  const safeScore = Math.max(0, Math.min(100, Math.round(score)));
-
-  const getColor = () => {
-    if (safeScore >= 80) return "text-green-500";
-    if (safeScore >= 60) return "text-amber-500";
-    return "text-red-500";
-  };
-
-  const getLabel = () => {
-    if (safeScore >= 80) return "Strong Match";
-    if (safeScore >= 60) return "Moderate Match";
-    return "Low Match";
-  };
-
-  const circumference = 2 * Math.PI * 68;
-
-  return (
-    <div className="flex flex-col items-center">
-      <div className="relative w-44 h-44">
-        <svg className="w-full h-full -rotate-90" viewBox="0 0 180 180">
-          <circle
-            cx="90"
-            cy="90"
-            r="68"
-            stroke="currentColor"
-            strokeWidth="13"
-            fill="transparent"
-            className="text-gray-100"
-          />
-
-          <circle
-            cx="90"
-            cy="90"
-            r="68"
-            stroke="currentColor"
-            strokeWidth="13"
-            fill="transparent"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference - (safeScore / 100) * circumference}
-            className={`${getColor()} transition-all duration-1000`}
-          />
-        </svg>
-
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-4xl font-bold text-gray-900">{safeScore}</span>
-
-          <span className="text-sm text-gray-500">/ 100</span>
-        </div>
-      </div>
-
-      <span className={`mt-2 font-semibold ${getColor()}`}>{getLabel()}</span>
-    </div>
-  );
-}
-
-/* =========================================================
-   MATCH MINI
-========================================================= */
-
-function MatchMini({ label, score }) {
-  const safeScore = Math.max(0, Math.min(100, Math.round(score)));
-
-  return (
-    <div className="border border-gray-100 rounded-xl p-4">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm text-gray-500">{label}</span>
-
-        <span className="font-bold text-gray-900">{safeScore}</span>
-      </div>
-
-      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-        <div
-          className="h-full bg-gray-900 rounded-full transition-all"
-          style={{
-            width: `${safeScore}%`,
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================
-   RESULT CARD
-========================================================= */
-
-function ResultCard({ title, icon, children }) {
-  return (
-    <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-7">
-      <div className="flex items-center gap-3 mb-6">
-        {icon}
-
-        <h2 className="text-xl font-bold text-gray-900">{title}</h2>
-      </div>
-
-      {children}
-    </section>
-  );
-}
-
-/* =========================================================
-   RECOMMENDATION
-========================================================= */
-
-function Recommendation({ title, text }) {
-  return (
-    <div className="flex gap-3 p-4 rounded-xl bg-gray-50">
-      <Sparkles size={18} className="text-blue-500 mt-0.5 flex-shrink-0" />
-
-      <div>
-        <p className="font-semibold text-gray-900 text-sm">{title}</p>
-
-        <p className="text-sm text-gray-500 leading-6 mt-1">{text}</p>
-      </div>
-    </div>
-  );
-}
 
 export default JobMatch;
