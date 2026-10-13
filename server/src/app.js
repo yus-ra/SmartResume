@@ -8,6 +8,7 @@ import { attachUser } from "./middleware/auth.js";
 import authRoutes from "./routes/auth.routes.js";
 import resumeRoutes from "./routes/resume.routes.js";
 import portfolioRoutes from "./routes/portfolio.routes.js";
+import publicRoutes from "./routes/public.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
 
 export function createApp() {
@@ -43,6 +44,20 @@ export function createApp() {
   app.use("/api/resume", resumeRoutes);
   app.use("/api/portfolio", portfolioRoutes);
   app.use("/api/ai", aiRoutes);
+
+  /*
+   * Anonymous, read-only routes.
+   *
+   * Mounted LAST among the real routers and immediately BEFORE the `/api`
+   * catch-all below, so the catch-all still owns every unmatched path under
+   * `/api` and this cannot accidentally shadow or be shadowed by another
+   * router.
+   *
+   * `attachUser` above still runs for these requests — it never rejects, and a
+   * visitor with a session simply gets `req.user` populated and ignored.
+   */
+  app.use("/api/public", publicRoutes);
+
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "not_found", message: "No such endpoint." });
   });

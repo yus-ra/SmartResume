@@ -1,211 +1,65 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  AlertTriangle,
   ArrowLeft,
   Check,
-  ExternalLink,
-  Mail,
+  Edit3,
+  Eye,
   Plus,
   Save,
   Trash2,
   Upload,
-  Eye,
-  Edit3,
-  Globe,
-  AlertTriangle,
 } from "lucide-react";
 
 import Sidebar from "../../components/Navbar/Sidebar";
-
-import { loadResume, isEmptyResume, getResumeScope } from "../../lib/resumeSchema";
+import PortfolioDocument from "../../components/PortfolioDocument/PortfolioDocument";
+import ShareCard from "./ShareCard";
+import {
+  createDefaultPortfolio,
+  createDefaultProject,
+  isPlainObject,
+  normalizePortfolio,
+  PORTFOLIO_THEMES,
+} from "../../lib/portfolio";
 import { getPortfolio, patchPortfolio, putPortfolio } from "../../lib/api";
+import {
+  readLocalPortfolio,
+  runPortfolioMigrationIfNeeded,
+  writeLocalPortfolio,
+} from "./portfolioStorage";
+import { loadResume, isEmptyResume } from "../../lib/resumeSchema";
 
-/* =========================================================
-   THEMES
-========================================================= */
-
-const themes = [
-  {
-    id: 1,
-    name: "Minimal",
-    bg: "#FFFFFF",
-    accent: "#2563EB",
-    text: "#0F172A",
-    muted: "#64748B",
-  },
-  {
-    id: 2,
-    name: "Dark",
-    bg: "#0F172A",
-    accent: "#14B8A6",
-    text: "#F8FAFC",
-    muted: "#CBD5E1",
-  },
-  {
-    id: 3,
-    name: "Warm",
-    bg: "#FFFBEB",
-    accent: "#F59E0B",
-    text: "#451A03",
-    muted: "#92400E",
-  },
-];
-
-/* =========================================================
-   DEFAULT DATA
-========================================================= */
-
-const createDefaultProject = () => ({
-  id: Date.now() + Math.random(),
-  title: "",
-  desc: "",
-  tags: [],
-  link: "",
-});
-
-const defaultPortfolio = {
-  profile: {
-    name: "",
-    title: "",
-    bio: "",
-    email: "",
-    linkedin: "",
-    github: "",
-  },
-  projects: [],
-  themeId: 1,
-  published: false,
-};
-
-/* =========================================================
-   ACCOUNT SCOPING
-
-   Portfolio data is owned by the signed-in account. It used to
-   live in a single browser-global `portfolioData` key, which
-   meant User B could read User A's portfolio — including the
-   contact details seeded from A's resume — and could overwrite
-   it.
-
-   This page is the sole owner of that key, so it derives the key
-   here rather than adding a shared abstraction or changing the
-   resume module:
-
-     anonymous      portfolioData
-     account <id>   portfolioData:u<id>
-
-   An authenticated account NEVER reads the anonymous key.
-   ========================================================= */
-
-const PORTFOLIO_STORAGE_KEY = "portfolioData";
-
-/** Marker proving the one-time legacy migration has already run. */
-const PORTFOLIO_MIGRATION_MARKER_KEY = "smartresume_portfolio_migration_v1";
-
-/** Namespace holding pre-authentication portfolio data that has no owner. */
-const PORTFOLIO_QUARANTINE_KEY = "portfolioData:legacy-migrated";
-
-const getPortfolioStorageKey = () => {
-  const scope = getResumeScope();
-
-  return scope === null
-    ? PORTFOLIO_STORAGE_KEY
-    : `${PORTFOLIO_STORAGE_KEY}:u${scope}`;
-};
-
-/**
- * One-time quarantine of the old browser-global `portfolioData`.
+/*
+ * The portfolio builder.
  *
- * Its ownership is unknowable: a portfolio carries no owner id, and it may
- * have been seeded from any account's resume. Rather than assign it to
- * whoever signs in first, it is moved to a namespace this page never reads,
- * preserving it for a future explicit recovery flow.
+ * Three things are deliberately NOT defined here any more, because the published
+ * page at /p/:slug renders the same content and a second copy would drift:
  *
- * Guarded by the marker so it can never run twice, and it never overwrites an
- * existing quarantined payload.
+ *   the canonical shape + themes  -> lib/portfolio.js
+ *   the rendered document         -> components/PortfolioDocument
+ *   local storage scoping         -> pages/Portfolio/portfolioStorage.js
+ *
+ * What is left is this page's own concern: editing state, saving, and the
+ * publish/revoke controls.
+ *
+ * Two data sources are kept strictly apart:
+ *
+ *   `portfolio`  the content the user edits and saves (server-owned copy)
+ *   `share`      the public link state (server-owned, never part of the
+ *                portfolio payload, and never derived from it)
  */
-const runPortfolioMigrationIfNeeded = () => {
-  if (getResumeScope() === null) {
-    // Only ever run inside an authenticated session, so the quarantine is
-    // performed deliberately rather than on an anonymous visit.
-    return;
-  }
-
-  try {
-    if (localStorage.getItem(PORTFOLIO_MIGRATION_MARKER_KEY)) {
-      return;
-    }
-
-    const legacyRaw = localStorage.getItem(PORTFOLIO_STORAGE_KEY);
-
-    if (legacyRaw) {
-      if (localStorage.getItem(PORTFOLIO_QUARANTINE_KEY) === null) {
-        localStorage.setItem(PORTFOLIO_QUARANTINE_KEY, legacyRaw);
-      }
-
-      localStorage.removeItem(PORTFOLIO_STORAGE_KEY);
-    }
-
-    localStorage.setItem(
-      PORTFOLIO_MIGRATION_MARKER_KEY,
-      legacyRaw ? "quarantined" : "none",
-    );
-  } catch {
-    // A failed migration must never block the page. Leaving the legacy key in
-    // place is safe: no authenticated account reads it.
-  }
-};
-
-/* =========================================================
-    HELPERS
-  ========================================================= */
-
-const cleanUrl = (url = "") => {
-  const value = url.trim();
-
-  if (!value) {
-    return "";
-  }
-
-  if (
-    value.startsWith("http://") ||
-    value.startsWith("https://") ||
-    value.startsWith("mailto:")
-  ) {
-    return value;
-  }
-
-  if (value.includes("@") && !value.includes("/")) {
-    return `mailto:${value}`;
-  }
-
-  return `https://${value}`;
-};
-
-const getInitials = (name = "") => {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-
-  if (words.length === 0) {
-    return "SR";
-  }
-
-  if (words.length === 1) {
-    return words[0].slice(0, 2).toUpperCase();
-  }
-
-  return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
-};
-
-const isPlainObject = (value) =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /* =========================================================
    PORTFOLIO COMPONENT
 ========================================================= */
 
 const Portfolio = () => {
-  const [portfolio, setPortfolio] = useState(defaultPortfolio);
+  const [portfolio, setPortfolio] = useState(createDefaultPortfolio);
 
   const [resume, setResume] = useState(null);
+
+  const [share, setShare] = useState(null);
 
   const [activeTab, setActiveTab] = useState("editor");
 
@@ -215,6 +69,13 @@ const Portfolio = () => {
 
   /* =======================================================
       LOAD DATA
+
+      Local storage is the working copy and renders immediately; the server is
+      authoritative and replaces it once it answers.
+
+      A 404 is NOT "an empty portfolio": it means nothing has been saved
+      server-side yet, so the local copy is deliberately left alone. Treating it
+      as empty would replace a user's unsaved work with nothing.
   ======================================================= */
 
   useEffect(() => {
@@ -228,90 +89,81 @@ const Portfolio = () => {
 
         const parsedResume = isEmptyResume(loadedResume) ? null : loadedResume;
 
-        if (active) {
-          setResume(parsedResume);
-        }
+        const savedPortfolio = readLocalPortfolio();
 
-        const storedPortfolio = localStorage.getItem(
-          getPortfolioStorageKey(),
-        );
+        /*
+         * Seed the profile from the resume ONLY where the portfolio has nothing
+         * of its own. An explicit portfolio value always wins, so a resume edit
+         * is picked up without silently overwriting what the user typed here.
+         */
+        const local = {
+          profile: {
+            name:
+              savedPortfolio?.profile?.name ||
+              parsedResume?.contact?.name ||
+              "",
 
-        const savedPortfolio = storedPortfolio
-          ? JSON.parse(storedPortfolio)
-          : null;
+            title:
+              savedPortfolio?.profile?.title ||
+              parsedResume?.contact?.title ||
+              "",
 
-        const initialProfile = {
-          name:
-            savedPortfolio?.profile?.name || parsedResume?.contact?.name || "",
+            bio: savedPortfolio?.profile?.bio || parsedResume?.summary || "",
 
-          title:
-            savedPortfolio?.profile?.title || parsedResume?.contact?.title || "",
+            email:
+              savedPortfolio?.profile?.email ||
+              parsedResume?.contact?.email ||
+              "",
 
-          bio: savedPortfolio?.profile?.bio || parsedResume?.summary || "",
+            linkedin:
+              savedPortfolio?.profile?.linkedin ||
+              parsedResume?.contact?.linkedin ||
+              "",
 
-          email:
-            savedPortfolio?.profile?.email || parsedResume?.contact?.email || "",
+            github:
+              savedPortfolio?.profile?.github ||
+              parsedResume?.contact?.github ||
+              "",
+          },
 
-          linkedin:
-            savedPortfolio?.profile?.linkedin ||
-            parsedResume?.contact?.linkedin ||
-            "",
+          projects: savedPortfolio?.projects,
 
-          github:
-            savedPortfolio?.profile?.github ||
-            parsedResume?.contact?.github ||
-            "",
+          themeId: savedPortfolio?.themeId,
         };
 
-        const initialProjects = Array.isArray(savedPortfolio?.projects)
-          ? savedPortfolio.projects
-          : [];
-
-        const initial = {
-          profile: initialProfile,
-          projects: initialProjects,
-          themeId: savedPortfolio?.themeId || 1,
-          published: Boolean(savedPortfolio?.published),
-        };
-
-        if (active) {
-          setPortfolio(initial);
-        }
-
-        // The server is authoritative for the account's portfolio. A 404
-        // means nothing has been saved server-side yet, which is NOT the same
-        // as an empty portfolio, so the local copy is left untouched. A 5xx
-        // or network failure is likewise non-fatal: the local copy remains the
-        // working copy and the user can retry on save.
-        const result = await getPortfolio();
-
-        if (!active || !result.ok) {
+        if (!active) {
           return;
         }
 
-        // A 404 carries no portfolio payload; do not clobber local edits.
-        if (result.status === 404) {
+        setResume(parsedResume);
+        setPortfolio(normalizePortfolio(local));
+
+        const result = await getPortfolio();
+
+        if (!active || !result.ok || result.status === 404) {
           return;
         }
 
         const serverPortfolio = result.data?.portfolio;
 
-        if (!isPlainObject(serverPortfolio)) {
-          return;
+        if (isPlainObject(serverPortfolio)) {
+          /*
+           * The theme comes from `activeTemplate`, not from `data.themeId`.
+           * Both fields exist and can disagree, because switching a theme only
+           * PATCHes `activeTemplate` and does not rewrite the whole payload.
+           * `activeTemplate` is the typed, dedicated field, so it wins.
+           */
+          setPortfolio(
+            normalizePortfolio({
+              profile: serverPortfolio.profile ?? local.profile,
+              projects: serverPortfolio.projects ?? local.projects,
+              themeId: result.data?.activeTemplate ?? serverPortfolio.themeId,
+            }),
+          );
         }
 
-        if (active) {
-          setPortfolio({
-            profile: serverPortfolio.profile ?? initial.profile,
-            projects: Array.isArray(serverPortfolio.projects)
-              ? serverPortfolio.projects
-              : initial.projects,
-            themeId:
-              Number.isInteger(serverPortfolio.themeId) && serverPortfolio.themeId > 0
-                ? serverPortfolio.themeId
-                : initial.themeId,
-            published: Boolean(serverPortfolio.published),
-          });
+        if (result.data?.share) {
+          setShare(result.data.share);
         }
       } catch (error) {
         console.error("Could not load portfolio data:", error);
@@ -322,34 +174,6 @@ const Portfolio = () => {
       active = false;
     };
   }, []);
-
-  /* =======================================================
-     THEME
-
-     Ensure the active theme is always defined within the
-     component scope so render-time references cannot
-     fall out of scope.
-  ======================================================= */
-
-  const theme = themes.find((item) => item.id === portfolio.themeId) ||
-    themes[0] || {
-      id: 1,
-      name: "Minimal",
-      bg: "#FFFFFF",
-      accent: "#2563EB",
-      text: "#0F172A",
-      muted: "#64748B",
-    };
-
-  /* =======================================================
-     DERIVED DATA
-  ======================================================= */
-
-  const skills = resume?.skills || [];
-
-  const experience = resume?.experience || [];
-
-  const education = resume?.education || [];
 
   /* =======================================================
       PROFILE UPDATE
@@ -368,12 +192,15 @@ const Portfolio = () => {
     setSaved(false);
   };
 
-/* =======================================================
+  /* =======================================================
       THEME UPDATE
 
-      The selection is mirrored to the backend immediately so it survives
-      a refresh or a different device. A failure is non-fatal: the local
-      selection stays, and the next save retries it.
+      The selection is mirrored to the backend immediately so it survives a
+      refresh or a different device. A failure is non-fatal: the local selection
+      stays and the next save retries it.
+
+      `activeTemplate` is the single source of truth for the theme; the copy
+      inside `data.themeId` is rewritten by the next full save.
   ======================================================= */
 
   const updateTheme = (themeId) => {
@@ -449,33 +276,23 @@ const Portfolio = () => {
     setSaved(false);
   };
 
-/* =======================================================
+  /* =======================================================
       SAVE PORTFOLIO
 
       Local storage is written first — it is durable immediately and is the
-      fallback if the server is unreachable. The server copy is then pushed
-      and the returned authoritative record is adopted, so a refresh or a
-      second device shows exactly what was saved. A failed server request
-      must NOT clear the local copy or claim success.
+      fallback if the server is unreachable. The server copy is then pushed and
+      the returned authoritative record is adopted, so a refresh or a second
+      device shows exactly what was saved. A failed server request must NOT clear
+      the local copy or claim success.
   ======================================================= */
 
   const savePortfolio = async () => {
-    let localOk = false;
+    const written = writeLocalPortfolio(portfolio);
 
-    try {
-      localStorage.setItem(
-        getPortfolioStorageKey(),
-        JSON.stringify(portfolio),
-      );
-
-      localOk = true;
-    } catch (error) {
-      console.error("Could not save portfolio locally:", error);
-    }
-
-    if (!localOk) {
+    if (!written) {
       setSaveError("Could not save to this device. Storage may be full.");
-      return;
+
+      return { ok: false, message: "Could not save to this device." };
     }
 
     setSaved(false);
@@ -487,27 +304,41 @@ const Portfolio = () => {
     });
 
     if (!result.ok) {
-      // The local copy is still intact; the user can retry. Do not claim
-      // success and do not discard the edited values.
-      setSaveError(result.message || result.error || "Could not sync your portfolio to the cloud.");
-      return;
+      // The local copy is still intact; the user can retry. Do not claim success
+      // and do not discard the edited values.
+      const message =
+        result.message ||
+        result.error ||
+        "Could not sync your portfolio to the cloud.";
+
+      setSaveError(message);
+
+      return { ok: false, message };
     }
 
     const serverPortfolio = result.data?.portfolio;
 
     if (isPlainObject(serverPortfolio)) {
-      setPortfolio((current) => ({
-        ...current,
-        profile: serverPortfolio.profile ?? current.profile,
-        projects: Array.isArray(serverPortfolio.projects)
-          ? serverPortfolio.projects
-          : current.projects,
-        themeId:
-          Number.isInteger(serverPortfolio.themeId) && serverPortfolio.themeId > 0
-            ? serverPortfolio.themeId
-            : current.themeId,
-        published: Boolean(serverPortfolio.published),
-      }));
+      /*
+       * Adopt the server's copy, and take the theme from `activeTemplate` for
+       * the reason given in the load effect above.
+       *
+       * `published` is deliberately NOT carried on the client any more. Share
+       * state is server-owned (server/src/models/Portfolio.js) and lives in
+       * `share` below; a second, client-writable notion of "published" inside
+       * the portfolio payload is exactly the ambiguity that was removed.
+       */
+      setPortfolio(
+        normalizePortfolio({
+          profile: serverPortfolio.profile ?? portfolio.profile,
+          projects: serverPortfolio.projects ?? portfolio.projects,
+          themeId: result.data?.activeTemplate ?? serverPortfolio.themeId,
+        }),
+      );
+    }
+
+    if (result.data?.share) {
+      setShare(result.data.share);
     }
 
     setSaved(true);
@@ -515,6 +346,14 @@ const Portfolio = () => {
     setTimeout(() => {
       setSaved(false);
     }, 2500);
+
+    /*
+     * Publishing needs to know whether the portfolio is now on the server — the
+     * share endpoints refuse to create one themselves — so the outcome is
+     * returned rather than being left for a caller to infer from this page's
+     * state.
+     */
+    return { ok: true };
   };
 
   /* =======================================================
@@ -556,10 +395,10 @@ const Portfolio = () => {
                 </Link>
 
                 <div>
-                <h1 className="text-lg sm:text-xl font-bold text-[#0F172A]">
-                  Portfolio Builder
-                </h1>
-              </div>
+                  <h1 className="text-lg sm:text-xl font-bold text-[#0F172A]">
+                    Portfolio Builder
+                  </h1>
+                </div>
               </div>
 
               {/* RIGHT */}
@@ -603,14 +442,14 @@ const Portfolio = () => {
                       <Check size={16} />
                       Saved
                     </>
-                   ) : (
-                     <>
-                       <Save size={16} />
-                       Save
-                     </>
-                   )}
-                 </button>
-               </div>
+                  ) : (
+                    <>
+                      <Save size={16} />
+                      Save
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </header>
@@ -670,7 +509,7 @@ const Portfolio = () => {
                   />
 
                   <div className="grid grid-cols-3 gap-3">
-                    {themes.map((item) => (
+                    {PORTFOLIO_THEMES.map((item) => (
                       <button
                         key={item.id}
                         onClick={() => updateTheme(item.id)}
@@ -804,8 +643,9 @@ const Portfolio = () => {
                           </p>
 
                           <p className="text-xs text-[#3B82F6] mt-1">
-                            Your profile, experience and skills are
-                            automatically pulled from your saved resume.
+                            Your experience, education and skills are published
+                            with your portfolio. Your phone number and location
+                            are never published.
                           </p>
                         </div>
                       </div>
@@ -928,6 +768,22 @@ const Portfolio = () => {
                 </div>
 
                 {/* =================================================
+                    SHARE
+
+                    Share state is server-owned and fetched separately, and it
+                    is deliberately NOT the same thing as "saved". Saving stores
+                    the portfolio; publishing makes it readable by anyone with
+                    the link.
+                ================================================= */}
+
+                <ShareCard
+                  share={share}
+                  onShareChange={setShare}
+                  onEnsureSaved={savePortfolio}
+                  canPublish
+                />
+
+                {/* =================================================
                     SAVE CARD
                 ================================================= */}
 
@@ -961,15 +817,21 @@ const Portfolio = () => {
 
                   {saveError && (
                     <div className="mt-4 flex items-start gap-2 bg-[#7F1D1D] border border-[#F87171] text-[#FEE2E2] text-sm px-4 py-3 rounded-xl">
-                      <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+                      <AlertTriangle
+                        size={16}
+                        className="mt-0.5 flex-shrink-0"
+                      />
                       <span>{saveError}</span>
                     </div>
                   )}
                 </div>
               </section>
-
               {/* =================================================
                   PREVIEW
+
+                  The document itself is the shared component the published
+                  page also renders, so what the owner previews here is
+                  literally what a visitor receives.
               ================================================= */}
 
               <section
@@ -977,391 +839,25 @@ const Portfolio = () => {
                   activeTab === "editor" ? "hidden md:block" : ""
                 } rounded-2xl border border-[#E2E8F0] overflow-hidden`}
               >
-                <div className="px-5 py-4 border-b border-[#E2E8F0] flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-[#0F172A]">
-                      Live Preview
-                    </p>
+                <div className="px-5 py-4 border-b border-[#E2E8F0]">
+                  <p className="text-sm font-semibold text-[#0F172A]">
+                    Live Preview
+                  </p>
 
-                    <p className="text-xs text-[#64748B] mt-0.5">
-                      See how your portfolio looks.
-                    </p>
-                  </div>
+                  <p className="text-xs text-[#64748B] mt-0.5">
+                    See how your portfolio looks.
+                  </p>
                 </div>
 
-                <div
-                  className="min-h-[750px]"
-                  style={{
-                    backgroundColor: theme.bg,
-                    color: theme.text,
+                <PortfolioDocument
+                  portfolio={portfolio}
+                  resume={{
+                    experience: resume?.experience ?? [],
+                    education: resume?.education ?? [],
+                    skills: resume?.skills ?? [],
                   }}
-                >
-                  {/* HERO */}
-
-                  <div className="px-6 sm:px-10 pt-10 pb-8">
-                    <div
-                      className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold text-white mb-5"
-                      style={{
-                        backgroundColor: theme.accent,
-                      }}
-                    >
-                      {getInitials(portfolio.profile.name)}
-                    </div>
-
-                    <h2 className="text-3xl font-bold tracking-tight">
-                      {portfolio.profile.name || "Your Name"}
-                    </h2>
-
-                    <p
-                      className="text-lg font-medium mt-2"
-                      style={{
-                        color: theme.accent,
-                      }}
-                    >
-                      {portfolio.profile.title || "Your Professional Title"}
-                    </p>
-
-                    <p
-                      className="text-sm leading-6 mt-4 max-w-2xl"
-                      style={{
-                        color: theme.muted,
-                      }}
-                    >
-                      {portfolio.profile.bio ||
-                        "Your professional summary will appear here. Add a short introduction about yourself, your skills, and what you do."}
-                    </p>
-
-                    {/* SOCIAL LINKS */}
-
-                    <div className="flex flex-wrap gap-2 mt-6">
-                      {portfolio.profile.email && (
-                        <a
-                          href={cleanUrl(portfolio.profile.email)}
-                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border"
-                          style={{
-                            borderColor: `${theme.accent}40`,
-                            color: theme.accent,
-                          }}
-                        >
-                          <Mail size={14} />
-                          Email
-                        </a>
-                      )}
-
-                      {portfolio.profile.linkedin && (
-                        <a
-                          href={cleanUrl(portfolio.profile.linkedin)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border"
-                          style={{
-                            borderColor: `${theme.accent}40`,
-                            color: theme.accent,
-                          }}
-                        >
-                          <Globe size={14} />
-                          LinkedIn
-                        </a>
-                      )}
-
-                      {portfolio.profile.github && (
-                        <a
-                          href={cleanUrl(portfolio.profile.github)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border"
-                          style={{
-                            borderColor: `${theme.accent}40`,
-                            color: theme.accent,
-                          }}
-                        >
-                          <Globe size={14} />
-                          GitHub
-                        </a>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* DIVIDER */}
-
-                  <div
-                    className="mx-6 sm:mx-10 border-t"
-                    style={{
-                      borderColor: `${theme.accent}20`,
-                    }}
-                  />
-
-                  {/* EXPERIENCE */}
-
-                  <div className="px-6 sm:px-10 py-8">
-                    <h3
-                      className="text-sm font-bold uppercase tracking-wider mb-5"
-                      style={{
-                        color: theme.accent,
-                      }}
-                    >
-                      Experience
-                    </h3>
-
-                    {experience.length > 0 ? (
-                      <div className="space-y-6">
-                        {experience.map((item, index) => (
-                          <div key={item.id || index} className="relative pl-5">
-                            <div
-                              className="absolute left-0 top-1.5 w-2 h-2 rounded-full"
-                              style={{
-                                backgroundColor: theme.accent,
-                              }}
-                            />
-
-                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1">
-                              <div>
-                                <h4 className="font-semibold">
-                                  {item.role || "Role"}
-                                </h4>
-
-                                <p
-                                  className="text-sm mt-1"
-                                  style={{
-                                    color: theme.accent,
-                                  }}
-                                >
-                                  {item.company || "Company"}
-                                </p>
-                              </div>
-
-                              {item.period && (
-                                <span
-                                  className="text-xs"
-                                  style={{
-                                    color: theme.muted,
-                                  }}
-                                >
-                                  {item.period}
-                                </span>
-                              )}
-                            </div>
-
-                            {Array.isArray(item.bullets) &&
-                              item.bullets.length > 0 && (
-                                <ul
-                                  className="mt-3 space-y-2 text-sm leading-5"
-                                  style={{
-                                    color: theme.muted,
-                                  }}
-                                >
-                                  {item.bullets.map((bullet, bulletIndex) => (
-                                    <li
-                                      key={bulletIndex}
-                                      className="flex gap-2"
-                                    >
-                                      <span>•</span>
-
-                                      <span>{bullet}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <EmptyPreview
-                        text="Add experience to your resume and it will appear here."
-                        theme={theme}
-                      />
-                    )}
-                  </div>
-
-                  {/* PROJECTS */}
-
-                  <div className="px-6 sm:px-10 py-8">
-                    <h3
-                      className="text-sm font-bold uppercase tracking-wider mb-5"
-                      style={{
-                        color: theme.accent,
-                      }}
-                    >
-                      Featured Projects
-                    </h3>
-
-                    {portfolio.projects.filter(
-                      (project) => project.title || project.desc,
-                    ).length > 0 ? (
-                      <div className="grid grid-cols-1 gap-4">
-                        {portfolio.projects
-                          .filter((project) => project.title || project.desc)
-                          .map((project) => (
-                            <div
-                              key={project.id}
-                              className="rounded-xl border p-4"
-                              style={{
-                                borderColor: `${theme.accent}25`,
-                              }}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <h4 className="font-semibold">
-                                    {project.title || "Untitled Project"}
-                                  </h4>
-
-                                  {project.desc && (
-                                    <p
-                                      className="text-sm leading-5 mt-2"
-                                      style={{
-                                        color: theme.muted,
-                                      }}
-                                    >
-                                      {project.desc}
-                                    </p>
-                                  )}
-                                </div>
-
-                                {project.link && (
-                                  <a
-                                    href={cleanUrl(project.link)}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="flex-shrink-0"
-                                    style={{
-                                      color: theme.accent,
-                                    }}
-                                  >
-                                    <ExternalLink size={17} />
-                                  </a>
-                                )}
-                              </div>
-
-                              {project.tags?.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mt-4">
-                                  {project.tags.map((tag, tagIndex) => (
-                                    <span
-                                      key={`${project.id}-${tagIndex}`}
-                                      className="px-2.5 py-1 rounded-full text-[11px] font-medium"
-                                      style={{
-                                        backgroundColor: `${theme.accent}12`,
-                                        color: theme.accent,
-                                      }}
-                                    >
-                                      {tag}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                      </div>
-                    ) : (
-                      <EmptyPreview
-                        text="Add your projects to showcase your work."
-                        theme={theme}
-                      />
-                    )}
-                  </div>
-
-                  {/* SKILLS */}
-
-                  <div className="px-6 sm:px-10 py-8">
-                    <h3
-                      className="text-sm font-bold uppercase tracking-wider mb-5"
-                      style={{
-                        color: theme.accent,
-                      }}
-                    >
-                      Skills
-                    </h3>
-
-                    {skills.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {skills.map((skill, index) => (
-                          <span
-                            key={`${skill}-${index}`}
-                            className="px-3 py-2 rounded-lg text-xs font-medium border"
-                            style={{
-                              borderColor: `${theme.accent}25`,
-                              color: theme.text,
-                            }}
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <EmptyPreview
-                        text="Your resume skills will appear here."
-                        theme={theme}
-                      />
-                    )}
-                  </div>
-
-                  {/* EDUCATION */}
-
-                  {education.length > 0 && (
-                    <div className="px-6 sm:px-10 py-8">
-                      <h3
-                        className="text-sm font-bold uppercase tracking-wider mb-5"
-                        style={{
-                          color: theme.accent,
-                        }}
-                      >
-                        Education
-                      </h3>
-
-                      <div className="space-y-4">
-                        {education.map((item, index) => (
-                          <div
-                            key={item.id || index}
-                            className="flex flex-col sm:flex-row sm:justify-between gap-1"
-                          >
-                            <div>
-                              <h4 className="font-semibold">
-                                {item.degree || "Degree"}
-                              </h4>
-
-                              <p
-                                className="text-sm mt-1"
-                                style={{
-                                  color: theme.muted,
-                                }}
-                              >
-                                {item.school || "Institution"}
-                              </p>
-                            </div>
-
-                            {item.period && (
-                              <span
-                                className="text-xs"
-                                style={{
-                                  color: theme.muted,
-                                }}
-                              >
-                                {item.period}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* FOOTER */}
-
-                  <div
-                    className="px-6 sm:px-10 py-6 border-t"
-                    style={{
-                      borderColor: `${theme.accent}20`,
-                    }}
-                  >
-                    <p
-                      className="text-xs"
-                      style={{
-                        color: theme.muted,
-                      }}
-                    >
-                      Built with SmartResume
-                    </p>
-                  </div>
-                </div>
+                  className="min-h-[750px]"
+                />
               </section>
             </div>
           </div>
@@ -1405,30 +901,6 @@ const SectionTitle = ({ title, description }) => {
       {description && (
         <p className="text-xs text-[#64748B] mt-1">{description}</p>
       )}
-    </div>
-  );
-};
-
-/* =========================================================
-   EMPTY PREVIEW
-========================================================= */
-
-const EmptyPreview = ({ text, theme }) => {
-  return (
-    <div
-      className="rounded-xl border border-dashed p-4"
-      style={{
-        borderColor: `${theme.accent}30`,
-      }}
-    >
-      <p
-        className="text-sm"
-        style={{
-          color: theme.muted,
-        }}
-      >
-        {text}
-      </p>
     </div>
   );
 };

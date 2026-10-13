@@ -33,8 +33,14 @@ const failure = (status, error, message, fields) => ({
 /**
  * Perform a JSON request against the API.
  * Always resolves; never rejects.
+ *
+ * `credentials` defaults to "include" because almost every endpoint is
+ * session-scoped. The one exception is the public portfolio read, which is by
+ * definition anonymous: sending the cookie there would make the server look the
+ * session up for nothing and would make the request behave differently
+ * depending on who is viewing the page. Callers pass "omit" for that.
  */
-async function request(path, { method = "GET", body } = {}) {
+async function request(path, { method = "GET", body, credentials = "include" } = {}) {
   const controller =
     typeof AbortController === "undefined" ? null : new AbortController();
 
@@ -48,7 +54,7 @@ async function request(path, { method = "GET", body } = {}) {
     response = await fetch(`${API_BASE_URL}${path}`, {
       method,
       // Required for the httpOnly session cookie to be sent and stored.
-      credentials: "include",
+      credentials,
       headers: {
         Accept: "application/json",
         ...(body ? { "Content-Type": "application/json" } : {}),
@@ -211,6 +217,85 @@ export function patchPortfolio({ activeTemplate } = {}) {
     method: "PATCH",
     body: { activeTemplate },
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Public share-link endpoints                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Publish the account's portfolio and get its public link.
+ *
+ * 200 -> `{ share: { enabled, slug, publishedAt, showContact, publicPath } }`
+ * 409 -> `{ error: "portfolio_not_saved" }` — the portfolio has never been
+ *        saved, so there is nothing to publish. The caller should save first.
+ *
+ * Idempotent: calling it again returns the SAME slug, so a retry can never
+ * invalidate a link the owner has already handed out.
+ */
+export function enablePortfolioShare() {
+  return request("/api/portfolio/share", { method: "POST" });
+}
+
+/**
+ * Take the public link offline.
+ *
+ * The slug is retained by the server, so re-publishing restores the same URL.
+ * The link stops working on the next request.
+ */
+export function revokePortfolioShare() {
+  return request("/api/portfolio/share", { method: "DELETE" });
+}
+
+/**
+ * Change what the published page shows, or replace the link entirely.
+ *
+ * @param {object}  options
+ * @param {boolean} [options.showContact]  Whether contact details are public.
+ * @param {boolean} [options.rotate]       Mint a new slug, invalidating the old
+ *                                         link immediately.
+ */
+export function updatePortfolioShare({ showContact, rotate } = {}) {
+  return request("/api/portfolio/share", {
+    method: "PATCH",
+    body: { showContact, rotate },
+  });
+}
+
+/**
+ * Fetch a published portfolio for anonymous viewing.
+ *
+ * This is the only call in this module that runs without a session, and it is
+ * sent with `credentials: "omit"` for that reason: the public page must render
+ * identically for a signed-in and a signed-out visitor, and the request has no
+ * business carrying the viewer's cookie to a resource that is not theirs.
+ *
+ * 200 -> `{ portfolio, resume, updatedAt }` (already projected to an allow-list
+ *        by the server; see server/src/lib/publicPortfolio.js)
+ * 404 -> `{ error: "not_found" }` for an unknown, malformed OR revoked slug.
+ *        The three are deliberately indistinguishable.
+ * 429 -> `{ error: "rate_limited" }`
+ */
+export function getPublicPortfolio(slug) {
+  return request(`/api/public/portfolios/${encodeURIComponent(slug)}`, {
+    credentials: "omit",
+  });
+}
+
+/**
+ * Build the absolute, shareable URL for a public path.
+ *
+ * The server returns `publicPath` (`/p/<slug>`) rather than a full URL, because
+ * it has no reliable way to know which host the client is served from — a
+ * server-side CLIENT_ORIGIN is not the same thing as the origin the visitor is
+ * actually using, particularly behind a proxy or on a preview deployment.
+ */
+export function buildPublicUrl(publicPath) {
+  if (!publicPath || typeof window === "undefined") {
+    return "";
+  }
+
+  return `${window.location.origin}${publicPath}`;
 }
 
 export { API_BASE_URL, REQUEST_TIMEOUT_MS };

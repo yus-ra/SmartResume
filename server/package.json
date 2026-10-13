@@ -10,7 +10,8 @@
   },
   "scripts": {
     "dev": "node --watch src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "migrate:portfolio-share-index": "node scripts/replacePortfolioShareSlugIndex.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
