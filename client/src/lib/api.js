@@ -242,3 +242,27 @@ export function putResume(resume, schemaVersion) {
     body: { schemaVersion, resume },
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* AI endpoints                                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Request an advisory explanation of the deterministic Job Match result.
+ *
+ * The server builds the prompt from the aggregated match data only — the
+ * user's full resume is never sent. The deterministic score remains the
+ * source of truth; the explanation is purely advisory.
+ *
+ * 200 -> `{ ok: true, explanation: "..." }`
+ * 503 -> `{ error: "ai_unavailable", message }` (no key configured)
+ * 502 -> `{ error: "ai_provider_error", message }` (transient provider failure)
+ * 400 -> `{ error: "validation_failed", message, fields }`
+ * 401 -> unauthorized (handled by the session gate)
+ */
+export function explainMatch(payload) {
+  return request("/api/ai/explain-match", {
+    method: "POST",
+    body: payload,
+  });
+}

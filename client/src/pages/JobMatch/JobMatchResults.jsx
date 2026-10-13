@@ -1,10 +1,48 @@
+import { useState } from "react";
 import { useLocation, Link, useNavigate } from "react-router-dom";
+import { Sparkles } from "lucide-react";
 import Sidebar from "../../components/Navbar/Sidebar";
+import { explainMatch } from "../../lib/api";
 
 const JobMatchResults = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { analysis, jobTitle, company } = location.state || {};
+  const { analysis, jobTitle, company, jobDescription } = location.state || {};
+
+  const [explanation, setExplanation] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [unavailable, setUnavailable] = useState(false);
+
+  const requestExplanation = async () => {
+    if (!analysis) return;
+
+    setLoading(true);
+    setError(null);
+    setUnavailable(false);
+
+    const result = await explainMatch({
+      jobTitle: jobTitle || "",
+      company: company || "",
+      jobDescription: jobDescription || "",
+      matchScore: analysis.overallScore,
+      matchedSkills: analysis.matchedKeywords || [],
+      missingSkills: analysis.missingKeywords || [],
+    });
+
+    if (!result.ok) {
+      if (result.status === 503 && result.error === "ai_unavailable") {
+        setUnavailable(true);
+      } else {
+        setError(result.message || "Could not load AI explanation.");
+      }
+      setLoading(false);
+      return;
+    }
+
+    setExplanation(result.data?.explanation || null);
+    setLoading(false);
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
@@ -140,6 +178,99 @@ const JobMatchResults = () => {
                     </ul>
                   </div>
                 </div>
+
+                {/* AI Explanation */}
+                <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+                  <div className="flex items-start gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                      <Sparkles size={24} className="text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <h2 className="text-xl font-bold text-gray-900">
+                        AI Explanation
+                      </h2>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Advisory commentary on your match result. The score above
+                        is computed deterministically and is the source of truth.
+                      </p>
+                    </div>
+                  </div>
+
+                  {!explanation && !loading && !error && !unavailable && (
+                    <div className="text-center py-6">
+                      <p className="text-sm text-gray-500 mb-5">
+                        Get a plain-language explanation of why your resume
+                        matches (or does not match) this job.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={requestExplanation}
+                        className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-800 transition"
+                      >
+                        <Sparkles size={18} />
+                        Explain my match
+                      </button>
+                    </div>
+                  )}
+
+                  {loading && (
+                    <div className="flex items-center justify-center py-10">
+                      <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+                      <span className="ml-3 text-sm text-gray-500">
+                        Generating explanation...
+                      </span>
+                    </div>
+                  )}
+
+                  {unavailable && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+                      <p className="text-sm font-semibold text-amber-800">
+                        AI explanation is not available.
+                      </p>
+                      <p className="text-sm text-amber-700 mt-1">
+                        The AI service is not configured on this server. Your
+                        deterministic match score and recommendations above are
+                        still fully available.
+                      </p>
+                    </div>
+                  )}
+
+                  {error && !loading && (
+                    <div className="space-y-4">
+                      <div className="bg-red-50 border border-red-200 rounded-xl p-5">
+                        <p className="text-sm font-semibold text-red-800">
+                          Could not load explanation.
+                        </p>
+                        <p className="text-sm text-red-700 mt-1">{error}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={requestExplanation}
+                        className="text-sm font-semibold text-blue-600 hover:text-blue-800"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  )}
+
+                  {explanation && !loading && (
+                    <div className="space-y-5">
+                      <div className="prose prose-sm prose-gray max-w-none text-gray-700 leading-7 whitespace-pre-wrap">
+                        {explanation}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExplanation(null);
+                          requestExplanation();
+                        }}
+                        className="text-sm font-semibold text-blue-600 hover:text-blue-800"
+                      >
+                        Regenerate
+                      </button>
+                    </div>
+                  )}
+                </section>
 
                 <div className="flex justify-end gap-3 pt-4">
                   <Link
