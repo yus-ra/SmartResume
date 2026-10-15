@@ -123,7 +123,12 @@ const Login = () => {
         >
           <LogoIcon />
           <span>
-            Smart<span style={{ color: "#14B8A6" }}>Resume</span>
+            <span className="font-extrabold tracking-tight text-white">
+              Smart
+            </span>
+            <span className="font-extrabold tracking-tight text-[#5EEAD4]">
+              Resume
+            </span>
           </span>
         </Link>
 
@@ -198,7 +203,12 @@ const Login = () => {
           >
             <LogoIcon />
             <span>
-              Smart<span style={{ color: "#2563EB" }}>Resume</span>
+              <span className="font-extrabold tracking-tight text-[#2563EB]">
+                Smart
+              </span>
+              <span className="font-extrabold tracking-tight text-[#0F766E]">
+                Resume
+              </span>
             </span>
           </Link>
 

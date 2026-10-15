@@ -82,10 +82,9 @@ const Navbar = () => {
           </Link>
           <Link
             to="/register"
-            className="text-sm font-semibold text-white px-5 py-2.5 rounded-xl shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5"
-            style={{ background: "linear-gradient(135deg,#2563EB,#1D4ED8)" }}
+            className="text-sm font-semibold text-white bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] px-5 py-2.5 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#93C5FD]/70 focus-visible:ring-offset-2"
           >
-            Register
+            <span className="text-white font-semibold">Register</span>
           </Link>
         </div>
 
@@ -130,10 +129,9 @@ const Navbar = () => {
             </Link>
             <Link
               to="/register"
-              className="flex-1 text-sm font-semibold text-white py-2 rounded-xl text-center"
-              style={{ background: "linear-gradient(135deg,#2563EB,#1D4ED8)" }}
+              className="flex-1 text-sm font-semibold text-white bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] py-2 rounded-xl text-center shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#93C5FD]/70 focus-visible:ring-offset-2"
             >
-              Register
+              <span className="text-white font-semibold">Register</span>
             </Link>
           </div>
         </div>

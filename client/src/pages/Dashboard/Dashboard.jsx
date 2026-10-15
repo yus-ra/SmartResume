@@ -352,10 +352,12 @@ const Dashboard = () => {
 
               <Link
                 to="/editor"
-                className="flex items-center gap-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm hover:shadow-md"
+                className="flex items-center gap-2 text-white bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#93C5FD]/70 focus-visible:ring-offset-2"
               >
-                <Plus size={17} />
-                Create Resume
+                <Plus size={17} className="text-white" />
+                <span className="font-bold tracking-tight text-white">
+                  Create Resume
+                </span>
               </Link>
             </div>
           </div>
@@ -388,10 +390,12 @@ const Dashboard = () => {
               <div className="flex flex-col sm:flex-row gap-3 justify-center mt-7">
                 <Link
                   to="/editor"
-                  className="inline-flex items-center justify-center gap-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-3 rounded-xl text-sm font-semibold transition-all"
+                  className="inline-flex items-center justify-center gap-2 text-white bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] px-5 py-3 rounded-xl text-sm font-bold transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#93C5FD]/70 focus-visible:ring-offset-2"
                 >
-                  <Plus size={17} />
-                  Create Resume
+                  <Plus size={17} className="text-white" />
+                  <span className="font-bold tracking-tight text-white">
+                    Create Resume
+                  </span>
                 </Link>
 
                 <Link
