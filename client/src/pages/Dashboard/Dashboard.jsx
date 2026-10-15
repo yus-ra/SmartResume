@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 import Sidebar from "../../components/Navbar/Sidebar";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/AuthContextValue.js";
 import {
   getResumeSyncState,
   loadResume,

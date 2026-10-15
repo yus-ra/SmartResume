@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -11,7 +10,7 @@ import {
 } from "lucide-react";
 
 import { LogoIcon } from "./Navbar";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/AuthContextValue.js";
 
 const navItems = [
   {
@@ -58,17 +57,8 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
-  const [userState, setUserState] = useState(() => ({
-    fullName: user?.fullName || "SmartResume User",
-    initials: getInitials(user?.fullName || "SmartResume User"),
-  }));
-
-  useEffect(() => {
-    setUserState({
-      fullName: user?.fullName || "SmartResume User",
-      initials: getInitials(user?.fullName || "SmartResume User"),
-    });
-  }, [user]);
+  const fullName = user?.fullName || "SmartResume User";
+  const initials = getInitials(fullName);
 
   const handleLogout = () => {
     logout();
@@ -166,12 +156,12 @@ const Sidebar = () => {
       <div className="border-t border-[#E2E8F0] p-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#2563EB] to-[#14B8A6] flex items-center justify-center text-white font-semibold text-xs shadow-sm">
-            {userState.initials}
+            {initials}
           </div>
 
           <div className="flex-1 min-w-0">
             <div className="text-xs font-semibold text-[#0F172A] truncate">
-              {userState.fullName}
+              {fullName}
             </div>
 
             <div className="text-[10px] text-[#94A3B8]">Free Plan</div>

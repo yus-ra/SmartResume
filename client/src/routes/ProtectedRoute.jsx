@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/AuthContextValue.js";
 
 /*
  * While the session is still being resolved the answer is genuinely unknown,

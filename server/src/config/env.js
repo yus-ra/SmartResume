@@ -23,10 +23,9 @@ export const env = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
 
   /*
-   * Optional SMTP settings. When none are present, transactional email
-   * (password resets) is printed to the server console instead — this is
-   * intentional and documented, so the flow is testable without a mail
-   * server. Set these to deliver real email:
+   * Optional SMTP settings. Without them, transactional email (password
+   * resets) is not sent and its contents are never printed. Set these to
+   * deliver real email:
    *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
    */
   smtpHost: (process.env.SMTP_HOST || "").trim(),

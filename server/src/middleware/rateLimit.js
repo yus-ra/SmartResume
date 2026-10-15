@@ -29,6 +29,7 @@
 
 /** Client buckets, keyed by IP. Entries are dropped once their window passes. */
 const buckets = new Map();
+let nextLimiterId = 0;
 
 /** How many requests pass before expired buckets are swept. */
 const PRUNE_INTERVAL = 500;
@@ -44,6 +45,7 @@ const PRUNE_INTERVAL = 500;
 export function createRateLimit({ windowMs, max, message }) {
   /** Requests this limiter has handled, used to trigger opportunistic sweeps. */
   let handled = 0;
+  const limiterId = nextLimiterId++;
 
   return function rateLimit(req, res, next) {
     /*
@@ -57,7 +59,8 @@ export function createRateLimit({ windowMs, max, message }) {
       pruneRateLimitBuckets();
     }
 
-    const key = req.ip || req.socket?.remoteAddress || "unknown";
+    const clientIp = req.ip || req.socket?.remoteAddress || "unknown";
+    const key = `${limiterId}:${clientIp}`;
     const now = Date.now();
 
     const bucket = buckets.get(key);

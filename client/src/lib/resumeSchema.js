@@ -197,6 +197,13 @@ const LEGACY_QUARANTINE_SCOPE = "legacy-migrated";
 let activeUserId = ANONYMOUS_SCOPE;
 
 /**
+ * Changes whenever the active account scope changes, including logout/login
+ * back into the same account. Async sync work captures this value so a result
+ * from an earlier session cannot be applied to a later one.
+ */
+let resumeScopeGeneration = 0;
+
+/**
  * Scope of the copy most recently read or written by loadResume/saveResume.
  * Used to refuse pushing a resume that was loaded under a different account.
  */
@@ -216,6 +223,23 @@ export const getResumeScope = () => activeUserId;
 /** True only when a real account is signed in. */
 export const isAuthenticatedResumeScope = () => activeUserId !== null;
 
+/** Capture both identity and session generation for asynchronous work. */
+const captureResumeScope = () => ({
+  userId: activeUserId,
+  generation: resumeScopeGeneration,
+});
+
+/** True only while the captured account session is still the active scope. */
+const isResumeScopeCurrent = (scope) =>
+  scope.userId === activeUserId &&
+  scope.generation === resumeScopeGeneration;
+
+const obsoleteSyncResult = () => ({
+  ok: false,
+  reason: "obsolete",
+  changed: false,
+});
+
 /**
  * Point resume storage at an account.
  *
@@ -231,6 +255,11 @@ export const setResumeScope = (userId) => {
   activeUserId = normalizeScopeId(userId);
 
   if (previous !== activeUserId) {
+    // Invalidate every in-flight pull or push before resetting this scope's
+    // visible sync state. A later response from the previous account is stale
+    // even if the user signs back into that same account id.
+    resumeScopeGeneration += 1;
+
     /*
      * Sync state is in-memory and would otherwise survive an account change,
      * letting a newly signed-in user see the previous account's "last synced"
@@ -1059,13 +1088,25 @@ const serverUpdatedAtMs = (iso) => {
  *   "error"            unexpected failure; nothing touched
  */
 export const syncResumeFromServer = async () => {
+  const scope = captureResumeScope();
+
   // Only an authenticated scope has a server record to pull. The anonymous
   // scope owns the un-scoped keys and must never touch an account.
-  if (!isAuthenticatedResumeScope()) {
+  if (scope.userId === null) {
     return { ok: false, reason: "anonymous_scope", changed: false };
   }
 
+  if (!isResumeScopeCurrent(scope)) {
+    return obsoleteSyncResult();
+  }
+
   setSyncState({ status: SYNC_STATUS_SYNCING, lastError: null });
+
+  // Subscribers run synchronously. If one changed accounts while receiving
+  // the syncing notification, do not start a request for the obsolete scope.
+  if (!isResumeScopeCurrent(scope)) {
+    return obsoleteSyncResult();
+  }
 
   let result;
 
@@ -1073,6 +1114,10 @@ export const syncResumeFromServer = async () => {
     result = await getResume();
   } catch (error) {
     // api.js is contracted never to throw, so this is belt and braces.
+    if (!isResumeScopeCurrent(scope)) {
+      return obsoleteSyncResult();
+    }
+
     setSyncState({
       status: SYNC_STATUS_OFFLINE,
       lastError: error?.message || "Could not reach the server.",
@@ -1081,16 +1126,35 @@ export const syncResumeFromServer = async () => {
     return { ok: false, reason: "offline", changed: false };
   }
 
+  // The request used the session cookie from when it was sent. Never read or
+  // write storage using the now-current scope until identity AND generation
+  // still match the scope that initiated that request.
+  if (!isResumeScopeCurrent(scope)) {
+    return obsoleteSyncResult();
+  }
+
   if (result.ok && result.data?.resume) {
     const incoming = normalizeResume(result.data.resume);
     const current = loadResume();
 
+    if (!isResumeScopeCurrent(scope)) {
+      return obsoleteSyncResult();
+    }
+
     // Nothing on this device worth protecting, so adopt the cloud copy.
     // This is what restores a resume onto a fresh browser.
     if (isEmptyResume(current)) {
+      if (!isResumeScopeCurrent(scope)) {
+        return obsoleteSyncResult();
+      }
+
       const saved = saveResume(incoming);
 
       if (!saved.ok) {
+        if (!isResumeScopeCurrent(scope)) {
+          return obsoleteSyncResult();
+        }
+
         setSyncState({
           status: SYNC_STATUS_ERROR,
           lastError: saved.error?.message || "Could not write the pulled resume locally.",
@@ -1099,9 +1163,17 @@ export const syncResumeFromServer = async () => {
         return { ok: false, reason: "error", changed: false };
       }
 
+      if (!isResumeScopeCurrent(scope)) {
+        return obsoleteSyncResult();
+      }
+
       // Align the local stamp with the server so the next pull does not
       // mistake this just-restored copy for newer offline work.
       writeLocalUpdatedAt(serverUpdatedAtMs(result.data.updatedAt) || Date.now());
+
+      if (!isResumeScopeCurrent(scope)) {
+        return obsoleteSyncResult();
+      }
 
       setSyncState({
         status: SYNC_STATUS_SYNCED,
@@ -1120,7 +1192,11 @@ export const syncResumeFromServer = async () => {
      * server is stale. Keep the local work and push it instead of overwriting.
      */
     if (localUpdatedAt > 0 && localUpdatedAt > serverAt) {
-      const pushed = await syncResumeToServer(current);
+      const pushed = await syncResumeToServerForScope(current, scope);
+
+      if (!isResumeScopeCurrent(scope)) {
+        return obsoleteSyncResult();
+      }
 
       return {
         ok: true,
@@ -1137,9 +1213,17 @@ export const syncResumeFromServer = async () => {
 
     // Written through saveResume() so resumeData and its cvData mirror stay
     // consistent, and so the normalizer runs exactly once per pull.
+    if (!isResumeScopeCurrent(scope)) {
+      return obsoleteSyncResult();
+    }
+
     const saved = saveResume(incoming);
 
     if (!saved.ok) {
+      if (!isResumeScopeCurrent(scope)) {
+        return obsoleteSyncResult();
+      }
+
       setSyncState({
         status: SYNC_STATUS_ERROR,
         lastError: saved.error?.message || "Could not write the pulled resume locally.",
@@ -1148,9 +1232,17 @@ export const syncResumeFromServer = async () => {
       return { ok: false, reason: "error", changed: false };
     }
 
+    if (!isResumeScopeCurrent(scope)) {
+      return obsoleteSyncResult();
+    }
+
     // This copy now matches the server, so record the server's own timestamp
     // rather than the current time.
     writeLocalUpdatedAt(serverAt || Date.now());
+
+    if (!isResumeScopeCurrent(scope)) {
+      return obsoleteSyncResult();
+    }
 
     setSyncState({
       status: SYNC_STATUS_SYNCED,
@@ -1169,6 +1261,10 @@ export const syncResumeFromServer = async () => {
   // 404 means the account has no server-side resume yet. Local data, if any,
   // must NOT be replaced with nothing.
   if (result.status === 404) {
+    if (!isResumeScopeCurrent(scope)) {
+      return obsoleteSyncResult();
+    }
+
     setSyncState({
       status: SYNC_STATUS_SYNCED,
       lastSyncedAt: nowIso(),
@@ -1176,6 +1272,10 @@ export const syncResumeFromServer = async () => {
     });
 
     return { ok: true, reason: "no_server_resume", changed: false };
+  }
+
+  if (!isResumeScopeCurrent(scope)) {
+    return obsoleteSyncResult();
   }
 
   if (result.status === 401) {
@@ -1203,7 +1303,7 @@ export const syncResumeFromServer = async () => {
  * Called after a successful local save, in the background. Never throws and
  * never blocks: the caller has already persisted locally.
  */
-export const syncResumeToServer = async (resume) => {
+const syncResumeToServerForScope = async (resume, scope) => {
   /*
    * Push safety, in order:
    *  1. No account signed in -> there is no record to write to. Refused.
@@ -1211,7 +1311,7 @@ export const syncResumeToServer = async (resume) => {
    *     account than the one now signed in. Refused, because sending it would
    *     write one user's resume into another user's cloud record.
    */
-  if (!isAuthenticatedResumeScope()) {
+  if (scope.userId === null) {
     return {
       ok: false,
       reason: "anonymous_scope",
@@ -1219,9 +1319,13 @@ export const syncResumeToServer = async (resume) => {
     };
   }
 
+  if (!isResumeScopeCurrent(scope)) {
+    return obsoleteSyncResult();
+  }
+
   // Strict equality: a copy loaded while anonymous (origin null) is also
   // refused once an account is active.
-  if (resumeOriginScope !== activeUserId) {
+  if (resumeOriginScope !== scope.userId) {
     return {
       ok: false,
       reason: "scope_mismatch",
@@ -1232,13 +1336,25 @@ export const syncResumeToServer = async (resume) => {
 
   const canonical = normalizeResume(resume);
 
+  if (!isResumeScopeCurrent(scope)) {
+    return obsoleteSyncResult();
+  }
+
   setSyncState({ status: SYNC_STATUS_SYNCING, lastError: null });
+
+  if (!isResumeScopeCurrent(scope)) {
+    return obsoleteSyncResult();
+  }
 
   try {
     const result = await putResume(
       canonical,
       canonical.schemaVersion ?? RESUME_SCHEMA_VERSION,
     );
+
+    if (!isResumeScopeCurrent(scope)) {
+      return obsoleteSyncResult();
+    }
 
     if (result.ok) {
       setSyncState({
@@ -1266,6 +1382,10 @@ export const syncResumeToServer = async (resume) => {
 
     return { ok: false, reason: "offline", message: result.message };
   } catch (error) {
+    if (!isResumeScopeCurrent(scope)) {
+      return obsoleteSyncResult();
+    }
+
     setSyncState({
       status: SYNC_STATUS_OFFLINE,
       lastError: error?.message || "Could not reach the server.",
@@ -1274,6 +1394,10 @@ export const syncResumeToServer = async (resume) => {
     return { ok: false, reason: "offline" };
   }
 };
+
+/** Mirror a resume using the account scope active when this call begins. */
+export const syncResumeToServer = async (resume) =>
+  syncResumeToServerForScope(resume, captureResumeScope());
 
 /** Reset sync state, e.g. on logout. Local resume data is not touched. */
 export const resetResumeSyncState = () => {

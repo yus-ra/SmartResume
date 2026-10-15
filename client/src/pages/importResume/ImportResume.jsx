@@ -1052,7 +1052,7 @@ const parseSkills = (lines) => {
 
     const pieces = cleanBullet(line)
       .split(/[,|•·;]/)
-      .map((skill) => skill.replace(/^[\-–—]\s*/, "").trim())
+      .map((skill) => skill.replace(/^[-–—]\s*/, "").trim())
       .filter(Boolean);
 
     for (const skill of pieces) {

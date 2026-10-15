@@ -1,7 +1,5 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -21,6 +19,7 @@ import {
   setResumeScope,
   syncResumeFromServer,
 } from "../lib/resumeSchema";
+import { AuthContext } from "./AuthContextValue.js";
 
 /*
  * Authentication state.
@@ -45,8 +44,6 @@ import {
  */
 
 const STORAGE_KEY = "smartresume_user";
-
-const AuthContext = createContext(null);
 
 /* ------------------------------------------------------------------ */
 /* Local profile cache (non-authoritative)                              */
@@ -131,6 +128,11 @@ export const AuthProvider = ({ children }) => {
   // Guards against setting state after the provider unmounts.
   const mounted = useRef(true);
 
+  // A session-restoration response is obsolete after an explicit auth
+  // transition. This prevents a delayed /me response from restoring an old
+  // account scope after a successful login, registration, or logout.
+  const authGeneration = useRef(0);
+
   useEffect(() => {
     mounted.current = true;
 
@@ -166,11 +168,12 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     let active = true;
+    const generation = authGeneration.current;
 
     (async () => {
       const result = await getSession();
 
-      if (!active) {
+      if (!active || generation !== authGeneration.current) {
         return;
       }
 
@@ -217,6 +220,7 @@ export const AuthProvider = ({ children }) => {
       const result = await loginRequest(credentials);
 
       if (result.ok && result.data?.user) {
+        authGeneration.current += 1;
         applyUser(result.data.user);
         setStatus("authenticated");
 
@@ -236,6 +240,7 @@ export const AuthProvider = ({ children }) => {
       const result = await registerRequest(details);
 
       if (result.ok && result.data?.user) {
+        authGeneration.current += 1;
         applyUser(result.data.user);
         setStatus("authenticated");
 
@@ -255,6 +260,7 @@ export const AuthProvider = ({ children }) => {
    * The server call is fire-and-forget: the cookie is cleared best-effort.
    */
   const logout = useCallback(async () => {
+    authGeneration.current += 1;
     clearCachedUser();
     clearResumeScope();
     setUser(null);
@@ -326,14 +332,4 @@ export const AuthProvider = ({ children }) => {
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-
-  return context;
 };

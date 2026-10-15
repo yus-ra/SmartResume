@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 import Sidebar from "../../components/Navbar/Sidebar";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/AuthContextValue.js";
 
 const inputClass =
   "w-full border border-[#E2E8F0] rounded-xl px-4 py-3 text-sm text-[#0F172A] placeholder:text-[#94A3B8] outline-none transition-all focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10";

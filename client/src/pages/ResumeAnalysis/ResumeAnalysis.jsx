@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { loadResume, isEmptyResume } from "../../lib/resumeSchema";
 
@@ -77,8 +77,6 @@ const normalizeText = (value = "") =>
     .replace(/[^\w\s+#./-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-
-const unique = (items) => [...new Set(items.filter(Boolean))];
 
 const countWords = (text = "") =>
   String(text).trim() ? String(text).trim().split(/\s+/).length : 0;
@@ -478,12 +476,9 @@ function buildResumeText(resume) {
 function analyzeKeywords(resume, roleInfo) {
   const text = buildResumeText(resume);
 
-  let keywords = [];
-
-  if (roleInfo.role) {
-    keywords = ROLE_PROFILES[roleInfo.role].keywords;
-  } else {
-    keywords = [
+  const keywords = roleInfo.role
+    ? ROLE_PROFILES[roleInfo.role].keywords
+    : [
       "communication",
       "leadership",
       "problem solving",
@@ -493,7 +488,6 @@ function analyzeKeywords(resume, roleInfo) {
       "research",
       "documentation",
     ];
-  }
 
   const matched = keywords.filter((keyword) =>
     text.includes(normalizeText(keyword)),
@@ -773,10 +767,7 @@ function calculateOverall(scores) {
 ========================================================= */
 
 export default function ResumeAnalysis() {
-  const [resume, setResume] = useState(null);
-  const [activeTab, setActiveTab] = useState("overview");
-
-  useEffect(() => {
+  const [resume] = useState(() => {
     // Read-only. loadResume() never writes, so opening this page cannot alter
     // stored data. It also falls through a corrupt resumeData to a valid
     // legacy cvData record instead of masking it. A resume with no content
@@ -784,10 +775,9 @@ export default function ResumeAnalysis() {
     // rather than a meaningless zero-score analysis.
     const loaded = loadResume();
 
-    if (isEmptyResume(loaded)) return;
-
-    setResume(loaded);
-  }, []);
+    return isEmptyResume(loaded) ? null : loaded;
+  });
+  const [activeTab, setActiveTab] = useState("overview");
 
   /* =======================================================
      ANALYSIS

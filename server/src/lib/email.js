@@ -3,14 +3,13 @@
  *
  * Email dispatch for transactional messages — currently password resets.
  *
- * `nodemailer` is an installed dependency but SMTP credentials are optional:
- * in development (or whenever SMTP env vars are absent) every message is
- * rendered to the server console instead, so the reset flow can be tested
- * without configuring a mail server. This is deliberate and intentional,
- * not a silent failure: the fallback is loud enough to be visible in logs.
+ * `nodemailer` is an installed dependency but SMTP credentials are optional.
+ * When SMTP is unavailable or delivery fails, message content is discarded;
+ * only a generic operational warning is logged. Message bodies may contain
+ * bearer credentials and must never be written to logs.
  *
- * Nothing here knows about users or passwords; it only knows how to send
- * (or print) a message given a recipient, subject and html body.
+ * Nothing here knows about users or passwords; it only knows how to send a
+ * message given a recipient, subject and html body.
  */
 
 import nodemailer from "nodemailer";
@@ -47,28 +46,22 @@ function getTransporter() {
 }
 
 /**
- * Send an email, or — when SMTP is not configured — print it loudly to the
- * console so the caller can read the link directly.
+ * Send an email when SMTP is configured. If SMTP is unavailable or fails,
+ * return a failure result without logging message content or recipient data.
  *
- * Always resolves; never throws. Returns `{ ok, via: "smtp" | "console" }`.
+ * Always resolves; never throws. Returns `{ ok, via }` where `via` is
+ * `"smtp"` or `"unavailable"`.
  */
 export async function sendMail({ to, subject, html }) {
-  const transport = getTransporter();
-
-  if (!transport) {
-    console.log("\n==========================================================");
-    console.log("PASSWORD RESET — SMTP not configured, printing message");
-    console.log("==========================================================");
-    console.log(`To:      ${to}`);
-    console.log(`Subject: ${subject}`);
-    console.log("----------------------------------------------------------");
-    console.log(html);
-    console.log("==========================================================\n");
-
-    return { ok: true, via: "console" };
-  }
-
   try {
+    const transport = getTransporter();
+
+    if (!transport) {
+      console.warn("[email] SMTP is not configured; transactional email was not sent.");
+
+      return { ok: false, via: "unavailable" };
+    }
+
     await transport.sendMail({
       from: env.smtpFrom || `"SmartResume" <no-reply@smartresume.local>`,
       to,
@@ -77,19 +70,11 @@ export async function sendMail({ to, subject, html }) {
     });
 
     return { ok: true, via: "smtp" };
-  } catch (error) {
-    console.error("[email] Failed to send via SMTP:", error);
+  } catch {
+    // Do not log the SMTP error object: provider errors can contain private
+    // connection details. Message content also contains the bearer reset link.
+    console.warn("[email] SMTP delivery failed; transactional email was not sent.");
 
-    // Fall back to the console so a failed send still surfaces the link.
-    console.log("\n==========================================================");
-    console.log("PASSWORD RESET — SMTP send failed, printing message");
-    console.log("==========================================================");
-    console.log(`To:      ${to}`);
-    console.log(`Subject: ${subject}`);
-    console.log("----------------------------------------------------------");
-    console.log(html);
-    console.log("==========================================================\n");
-
-    return { ok: true, via: "console" };
+    return { ok: false, via: "smtp" };
   }
 }
