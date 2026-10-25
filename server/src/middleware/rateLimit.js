@@ -22,9 +22,10 @@
  * an attacker cannot restart the server. If this is ever deployed across
  * instances, the counters must move to Redis or to the reverse proxy.
  *
- * `req.ip` is used, which relies on Express's `trust proxy` setting being
- * correct in production. Left at its default, it is the direct socket address,
- * which is the safe default (it cannot be spoofed by a header).
+ * `req.ip` is used. Express trusts one proxy hop based on Render's published
+ * Express example. Render's public networking guidance does not guarantee the
+ * exact forwarded-header hop count for every service, so verify req.ip on the
+ * deployed service and revisit this setting if the ingress chain differs.
  */
 
 /** Client buckets, keyed by IP. Entries are dropped once their window passes. */

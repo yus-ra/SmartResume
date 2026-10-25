@@ -18,7 +18,7 @@ async function start() {
 
   const app = createApp();
 
-  const server = app.listen(env.port, () => {
+  const logStartup = () => {
     console.log("");
     console.log(`[server] SmartResume API listening on http://localhost:${env.port}`);
     console.log(`[server] Environment: ${env.nodeEnv}`);
@@ -29,7 +29,13 @@ async function start() {
         : "[server] Database: unavailable — database routes will return 503",
     );
     console.log("");
-  });
+  };
+
+  // Keep the existing local listen behavior; Render requires an explicit
+  // public-interface bind for production web services.
+  const server = env.isProduction
+    ? app.listen(env.port, "0.0.0.0", logStartup)
+    : app.listen(env.port, logStartup);
 
   const shutdown = (signal) => {
     console.log(`\n[server] ${signal} received, shutting down.`);

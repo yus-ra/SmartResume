@@ -92,7 +92,7 @@ const invokePostRoute = async (path, body) => {
 
 test("authentication-sensitive endpoints have independent rate limits", async (t) => {
   const app = createApp();
-  assert.equal(app.get("trust proxy"), false);
+  assert.equal(app.get("trust proxy"), 1);
 
   const logs = [];
   const originalConsole = {
@@ -153,4 +153,66 @@ test("authentication-sensitive endpoints have independent rate limits", async (t
     console.warn = originalConsole.warn;
     console.error = originalConsole.error;
   }
+});
+
+test("Render forwarded client IPs keep authentication limits isolated", async (t) => {
+  const app = createApp();
+  assert.equal(app.get("trust proxy"), 1);
+
+  const route = findPostRoute("/register");
+  const limiter = route.route.stack[0].handle;
+  const forwardedClientIp = (ip) => {
+    const req = Object.create(app.request);
+    const socket = { remoteAddress: "10.0.0.8" };
+
+    Object.defineProperties(req, {
+      app: { value: app },
+      headers: { value: { "x-forwarded-for": ip } },
+      socket: { value: socket },
+      connection: { value: socket },
+    });
+
+    return req.ip;
+  };
+  const runLimiter = (ip) => {
+    const req = {
+      ip: forwardedClientIp(ip),
+      socket: { remoteAddress: "10.0.0.8" },
+    };
+    const res = {
+      statusCode: null,
+      headers: {},
+      set(name, value) {
+        this.headers[name.toLowerCase()] = value;
+        return this;
+      },
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(payload) {
+        this.body = payload;
+        return this;
+      },
+    };
+    let passed = false;
+
+    limiter(req, res, () => {
+      passed = true;
+    });
+
+    return { passed, res };
+  };
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    assert.equal(forwardedClientIp("198.51.100.31"), "198.51.100.31");
+    assert.equal(runLimiter("198.51.100.31").passed, true);
+  }
+
+  const limited = runLimiter("198.51.100.31");
+  assert.equal(limited.passed, false);
+  assert.equal(limited.res.statusCode, 429);
+
+  assert.equal(forwardedClientIp("198.51.100.32"), "198.51.100.32");
+  assert.equal(runLimiter("198.51.100.32").passed, true);
 });

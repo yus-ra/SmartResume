@@ -12,6 +12,7 @@ import {
 import { requireAuth } from "../middleware/auth.js";
 import { requireDatabase } from "../middleware/requireDatabase.js";
 import { createRateLimit } from "../middleware/rateLimit.js";
+import { asyncHandler } from "../middleware/asyncHandler.js";
 
 const router = Router();
 const genericRateLimitMessage = "Too many requests. Please try again later.";
@@ -52,8 +53,8 @@ const resetPasswordRateLimit = createRateLimit({
  * concern, and a user must never be stuck in a signed-in state because the
  * server lost its database.
  */
-router.post("/register", registrationRateLimit, register);
-router.post("/login", loginRateLimit, login);
+router.post("/register", registrationRateLimit, asyncHandler(register));
+router.post("/login", loginRateLimit, asyncHandler(login));
 
 /*
  * Forgot-password and reset-password are NOT gated here: each validates its
@@ -62,12 +63,20 @@ router.post("/login", loginRateLimit, login);
  * is down. Reset is deliberately NOT gated by `requireAuth`: the whole point
  * is to recover access without a session.
  */
-router.post("/forgot-password", forgotPasswordRateLimit, forgotPassword);
-router.post("/reset-password", resetPasswordRateLimit, resetPassword);
+router.post(
+  "/forgot-password",
+  forgotPasswordRateLimit,
+  asyncHandler(forgotPassword),
+);
+router.post(
+  "/reset-password",
+  resetPasswordRateLimit,
+  asyncHandler(resetPassword),
+);
 
 router.post("/logout", logout);
 
 router.get("/me", requireDatabase, requireAuth, me);
-router.patch("/me", requireDatabase, requireAuth, updateProfile);
+router.patch("/me", requireDatabase, requireAuth, asyncHandler(updateProfile));
 
 export default router;

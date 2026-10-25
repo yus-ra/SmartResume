@@ -15,6 +15,15 @@ export function createApp() {
   const app = express();
 
   /*
+   * Render's Express example uses one trusted hop. Its current networking
+   * guidance describes Cloudflare and Render load balancers but does not
+   * guarantee the X-Forwarded-For hop count observed by every service. Verify
+   * req.ip on the deployed service; keep this bounded rather than trusting all
+   * forwarded addresses, and revisit it if another proxy is added.
+   */
+  app.set("trust proxy", 1);
+
+  /*
    * Credentials must be allowed for the session cookie to survive a
    * cross-origin request from the Vite dev server.
    */
@@ -65,7 +74,9 @@ export function createApp() {
   // Final error handler. Never leak a stack trace to the client.
   // eslint-disable-next-line no-unused-vars
   app.use((error, _req, res, _next) => {
-    console.error("[error]", error);
+    // Do not emit error objects: driver and provider errors can contain
+    // request data, account details, or other sensitive context.
+    console.error("[error] Request failed.");
 
     res.status(500).json({
       error: "internal_error",
