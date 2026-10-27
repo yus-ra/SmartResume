@@ -62,7 +62,7 @@ const PublicHeader = () => (
 
       <Link
         to="/register"
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#E2E8F0] text-[#334155] text-sm font-semibold hover:bg-[#F8FAFC] transition"
+        className="inline-flex min-h-10 items-center gap-1.5 px-2 sm:gap-2 sm:px-4 py-2 rounded-xl border border-[#E2E8F0] text-[#334155] text-xs sm:text-sm font-semibold hover:bg-[#F8FAFC] transition"
       >
         Create your own
         <ArrowRight size={15} />

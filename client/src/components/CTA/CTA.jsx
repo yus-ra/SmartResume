@@ -3,7 +3,7 @@ const CTA = () => {
   return (
     <div className="py-16 px-6">
       <div
-        className="max-w-4xl mx-auto rounded-3xl p-10 text-center relative overflow-hidden"
+        className="max-w-4xl mx-auto rounded-3xl p-6 sm:p-10 text-center relative overflow-hidden"
         style={{
           background: "linear-gradient(135deg,#1E40AF,#2563EB,#0F766E)",
         }}

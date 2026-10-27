@@ -66,7 +66,68 @@ const Sidebar = () => {
   };
 
   return (
-    <aside className="hidden md:flex flex-col w-60 min-h-screen border-r border-[#E2E8F0] bg-white fixed top-0 left-0 bottom-0 z-40">
+    <>
+      <aside className="md:hidden w-full flex-shrink-0 border-b border-[#E2E8F0] bg-white">
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <Link
+            to="/dashboard"
+            className="flex min-w-0 items-center gap-2 font-bold text-[#0F172A]"
+          >
+            <LogoIcon />
+            <span className="truncate text-sm">
+              Smart<span className="text-[#2563EB]">Resume</span>
+            </span>
+          </Link>
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex min-w-0 flex-col">
+              <span className="max-w-28 truncate text-xs font-medium text-[#64748B]">
+                {fullName}
+              </span>
+              <span className="text-[10px] text-[#94A3B8]">Free Plan</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-[#64748B] hover:bg-[#FEF2F2] hover:text-[#EF4444] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
+              aria-label="Log out"
+              title="Log out"
+            >
+              <LogOut size={17} />
+            </button>
+          </div>
+        </div>
+        <nav
+          aria-label="Workspace"
+          className="grid grid-cols-3 gap-1 px-2 pb-2"
+        >
+          {[...navItems, { icon: Settings, label: "Settings", to: "/settings" }].map(
+            ({ icon: Icon, label, to }) => {
+              const active =
+                location.pathname === to ||
+                (to === "/job-match" &&
+                  location.pathname.startsWith("/job-match/"));
+
+              return (
+                <Link
+                  key={to}
+                  to={to}
+                  aria-current={active ? "page" : undefined}
+                  className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg px-1 py-1 text-[10px] font-medium leading-tight transition-colors ${
+                    active
+                      ? "bg-[#EFF6FF] text-[#2563EB]"
+                      : "text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A]"
+                  }`}
+                >
+                  <Icon size={16} aria-hidden="true" />
+                  <span className="text-center">{label}</span>
+                </Link>
+              );
+            },
+          )}
+        </nav>
+      </aside>
+
+      <aside className="hidden md:flex flex-col w-60 min-h-screen border-r border-[#E2E8F0] bg-white fixed top-0 left-0 bottom-0 z-40">
       {/* Logo */}
       <div className="px-5 pt-6 pb-7">
         <Link
@@ -177,7 +238,8 @@ const Sidebar = () => {
           </button>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };
 

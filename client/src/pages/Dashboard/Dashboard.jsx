@@ -311,7 +311,7 @@ const Dashboard = () => {
 
   return (
     <div
-      className="flex min-h-screen bg-[#F8FAFC]"
+      className="flex min-h-screen flex-col bg-[#F8FAFC] md:flex-row"
       style={{ fontFamily: "'Poppins', sans-serif" }}
     >
       <Sidebar />
@@ -341,10 +341,10 @@ const Dashboard = () => {
 
             {/* HEADER ACTIONS */}
 
-            <div className="hidden md:flex items-center gap-3">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
               <Link
                 to="/import-resume"
-                className="flex items-center gap-2 border border-[#E2E8F0] hover:border-[#2563EB] text-[#475569] hover:text-[#2563EB] bg-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                className="flex flex-1 items-center justify-center gap-2 border border-[#E2E8F0] hover:border-[#2563EB] text-[#475569] hover:text-[#2563EB] bg-white px-3 py-2.5 rounded-xl text-xs sm:flex-none sm:px-4 sm:text-sm font-semibold transition-all"
               >
                 <Upload size={17} />
                 Import Resume
@@ -352,7 +352,7 @@ const Dashboard = () => {
 
               <Link
                 to="/editor"
-                className="flex items-center gap-2 text-white bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#93C5FD]/70 focus-visible:ring-offset-2"
+                className="flex flex-1 items-center justify-center gap-2 text-white bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] px-3 py-2.5 rounded-xl text-xs sm:flex-none sm:px-5 sm:text-sm font-bold transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#93C5FD]/70 focus-visible:ring-offset-2"
               >
                 <Plus size={17} className="text-white" />
                 <span className="font-bold tracking-tight text-white">

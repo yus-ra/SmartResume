@@ -40,12 +40,20 @@ const failure = (status, error, message, fields) => ({
  * session up for nothing and would make the request behave differently
  * depending on who is viewing the page. Callers pass "omit" for that.
  */
-async function request(path, { method = "GET", body, credentials = "include" } = {}) {
+async function request(
+  path,
+  {
+    method = "GET",
+    body,
+    credentials = "include",
+    timeoutMs = REQUEST_TIMEOUT_MS,
+  } = {},
+) {
   const controller =
     typeof AbortController === "undefined" ? null : new AbortController();
 
   const timer = controller
-    ? setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    ? setTimeout(() => controller.abort(), timeoutMs)
     : null;
 
   let response;
@@ -349,5 +357,7 @@ export function explainMatch(payload) {
   return request("/api/ai/explain-match", {
     method: "POST",
     body: payload,
+    // The server aborts Gemini at 12 seconds and returns a safe 504.
+    timeoutMs: 15000,
   });
 }

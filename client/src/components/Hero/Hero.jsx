@@ -9,17 +9,17 @@ const ResumeIllustration = () => (
       }}
     />
     <div className="relative bg-white rounded-2xl shadow-2xl p-6 border border-[#E2E8F0]">
-      <div className="flex items-center gap-4 mb-5">
+      <div className="flex flex-wrap items-center gap-4 mb-5">
         <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#2563EB] to-[#14B8A6] flex items-center justify-center text-white font-bold text-xl">
           JD
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="font-bold text-[#0F172A] text-lg leading-tight">
             Jordan Davis
           </div>
           <div className="text-[#475569] text-sm">Senior Product Designer</div>
           <div className="text-[#94A3B8] text-xs mt-0.5">
-            jordan@email.com · San Francisco, CA
+            <span className="break-words">jordan@email.com · San Francisco, CA</span>
           </div>
         </div>
         <div className="ml-auto flex flex-col items-center">

@@ -492,7 +492,7 @@ const ResumeEditor = () => {
 
   return (
     <div
-      className="flex min-h-screen bg-[#F8FAFC]"
+      className="flex min-h-screen flex-col bg-[#F8FAFC] md:flex-row"
       style={{
         fontFamily: "'Poppins', sans-serif",
       }}
@@ -502,8 +502,8 @@ const ResumeEditor = () => {
       <main className="flex-1 md:ml-60 flex flex-col min-h-screen">
         {/* TOP BAR */}
 
-        <div className="border-b border-[#E2E8F0] bg-white px-6 py-3 flex items-center justify-between gap-4 sticky top-0 z-30">
-          <div className="flex items-center gap-3">
+        <div className="border-b border-[#E2E8F0] bg-white px-3 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sticky top-0 z-30">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
             <Link
               to="/dashboard"
               className="text-[#94A3B8] hover:text-[#2563EB] text-sm"
@@ -528,17 +528,17 @@ const ResumeEditor = () => {
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <button
               onClick={handleSave}
-              className="text-xs font-semibold px-4 py-2 rounded-lg border border-[#E2E8F0] text-[#475569]"
+              className="min-h-11 text-xs font-semibold px-4 py-2 rounded-lg border border-[#E2E8F0] text-[#475569] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
             >
               {saved ? "✓ Saved" : "Save Changes"}
             </button>
 
             <button
               onClick={handleAnalyze}
-              className="hidden md:block text-xs font-semibold text-white px-4 py-2 rounded-lg shadow-sm"
+              className="min-h-11 text-xs font-semibold text-white px-4 py-2 rounded-lg shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#14B8A6]"
               style={{
                 background: "linear-gradient(135deg,#14B8A6,#0F766E)",
               }}
@@ -548,7 +548,7 @@ const ResumeEditor = () => {
 
             <button
               onClick={exportPDF}
-              className="text-xs font-semibold text-white px-4 py-2 rounded-lg shadow-sm"
+              className="min-h-11 text-xs font-semibold text-white px-4 py-2 rounded-lg shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
               style={{
                 background: "linear-gradient(135deg,#2563EB,#1D4ED8)",
               }}
@@ -564,10 +564,10 @@ const ResumeEditor = () => {
           </div>
         )}
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex min-w-0 flex-col md:flex-row md:flex-1 md:overflow-hidden">
           {/* LEFT EDITOR */}
 
-          <div className="w-80 flex-shrink-0 border-r border-[#E2E8F0] bg-white flex flex-col">
+          <div className="w-full min-w-0 border-b border-[#E2E8F0] bg-white flex flex-col md:w-80 md:flex-shrink-0 md:border-b-0 md:border-r">
             {/* TEMPLATE */}
 
             <div className="p-4 border-b border-[#E2E8F0]">
@@ -964,7 +964,7 @@ const ResumeEditor = () => {
           {/* RESUME PREVIEW */}
           {/* ======================================== */}
 
-          <div className="flex-1 bg-[#F1F5F9] overflow-auto p-8 flex justify-center">
+          <div className="w-full min-w-0 bg-[#F1F5F9] overflow-auto p-4 sm:p-8 flex justify-center md:flex-1">
             <div
               style={{
                 transform: `scale(${zoom / 100})`,

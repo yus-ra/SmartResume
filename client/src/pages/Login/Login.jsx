@@ -82,7 +82,7 @@ const Login = () => {
 
     // Success message
     setResetMessage(
-      "If an account with that email exists, a reset link has been sent. Check your server console!",
+      "If an account with that email exists, a reset link has been sent. Check your email.",
     );
   };
 
@@ -194,7 +194,7 @@ const Login = () => {
       </div>
 
       {/* Right panel — form */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12 bg-[#F8FAFC]">
+      <div className="flex-1 flex items-center justify-center px-4 sm:px-6 py-8 sm:py-12 bg-[#F8FAFC]">
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <Link
@@ -212,7 +212,7 @@ const Login = () => {
             </span>
           </Link>
 
-          <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm p-8">
+          <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm p-5 sm:p-8">
             <h1 className="font-extrabold text-[#0F172A] text-2xl mb-1">
               Welcome Back 👋
             </h1>
@@ -317,11 +317,11 @@ const Login = () => {
 
       {showResetModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 bg-black/50 backdrop-blur-sm"
           onClick={closeResetModal}
         >
           <div
-            className="bg-white rounded-2xl border border-[#E2E8F0] shadow-xl w-full max-w-sm p-6"
+            className="my-auto bg-white rounded-2xl border border-[#E2E8F0] shadow-xl w-full max-w-sm p-5 sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">

@@ -682,9 +682,9 @@ const JobMatch = () => {
     <div className="min-h-screen bg-[#F8FAFC]">
       <Sidebar />
 
-      <div className="ml-60 min-h-screen">
+      <div className="min-h-screen md:ml-60">
         <header className="bg-white border-b border-gray-100">
-          <div className="px-12 py-8">
+          <div className="px-4 sm:px-6 lg:px-12 py-6 sm:py-8">
             <Link
               to="/dashboard"
               className="inline-flex items-center text-sm text-gray-500 hover:text-gray-900 transition"
@@ -702,7 +702,7 @@ const JobMatch = () => {
           </div>
         </header>
 
-        <main className="px-12 py-10">
+        <main className="px-4 sm:px-6 lg:px-12 py-6 sm:py-10">
           <div className="max-w-[1400px] mx-auto">
             {!resumeExists ? (
               <div className="max-w-xl mx-auto bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center">
@@ -733,7 +733,7 @@ const JobMatch = () => {
               </div>
             ) : (
               <div className="grid xl:grid-cols-[1fr_360px] gap-8">
-                <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-9">
+                <section className="min-w-0 bg-white rounded-3xl border border-gray-100 shadow-sm p-4 sm:p-6 lg:p-9">
                   <div className="flex items-start gap-4 mb-8">
                     <div className="w-14 h-14 rounded-2xl bg-gray-900 flex items-center justify-center flex-shrink-0">
                       <Target size={25} className="text-white" />

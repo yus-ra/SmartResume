@@ -1031,7 +1031,7 @@ export default function ResumeAnalysis() {
       {/* Header */}
 
       <header className="bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <Link
               to="/dashboard"
@@ -1051,7 +1051,7 @@ export default function ResumeAnalysis() {
 
           <Link
             to="/editor"
-            className="bg-gray-900 text-white px-5 py-3 rounded-xl font-semibold hover:bg-gray-800 transition"
+            className="inline-flex w-full justify-center sm:w-auto bg-gray-900 text-white px-5 py-3 rounded-xl font-semibold hover:bg-gray-800 transition"
           >
             Edit Resume
           </Link>
@@ -1060,11 +1060,11 @@ export default function ResumeAnalysis() {
 
       {/* Main */}
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
         {/* Score Card */}
 
-        <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 mb-8">
-          <div className="grid lg:grid-cols-[240px_1fr] gap-10 items-center">
+        <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-4 sm:p-8 mb-8">
+          <div className="grid lg:grid-cols-[240px_minmax(0,1fr)] gap-6 sm:gap-10 items-center">
             <ScoreGauge score={analysis.overall} />
 
             <div>
@@ -1105,7 +1105,7 @@ export default function ResumeAnalysis() {
 
         {/* Tabs */}
 
-        <div className="flex gap-2 bg-white p-2 rounded-2xl border border-gray-100 mb-6 w-fit">
+        <div className="flex w-fit max-w-full gap-2 overflow-x-auto bg-white p-2 rounded-2xl border border-gray-100 mb-6">
           {[
             ["overview", "Overview"],
             ["keywords", "Keywords"],
@@ -1114,7 +1114,7 @@ export default function ResumeAnalysis() {
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition ${
+              className={`flex-shrink-0 px-4 sm:px-5 py-2.5 rounded-xl text-sm font-semibold transition ${
                 activeTab === id
                   ? "bg-gray-900 text-white"
                   : "text-gray-500 hover:text-gray-900"
@@ -1363,9 +1363,9 @@ export default function ResumeAnalysis() {
               suggestions.map((suggestion, index) => (
                 <div
                   key={index}
-                  className="bg-white rounded-2xl border border-gray-100 p-6 flex items-start justify-between gap-6"
+                  className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6"
                 >
-                  <div className="flex gap-4">
+                  <div className="flex min-w-0 gap-4">
                     <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0">
                       💡
                     </div>
@@ -1390,7 +1390,7 @@ export default function ResumeAnalysis() {
                   <Link
                     to="/editor"
                     onClick={() => handleFix(suggestion.section)}
-                    className="text-sm font-semibold text-gray-900 whitespace-nowrap hover:underline"
+                    className="self-start sm:self-auto text-sm font-semibold text-gray-900 hover:underline"
                   >
                     Fix →
                   </Link>
@@ -1451,7 +1451,7 @@ function ScoreMini({ label, score }) {
 
 function AnalysisCard({ title, score, children }) {
   return (
-    <div className="bg-white rounded-3xl border border-gray-100 p-7">
+    <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-7">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-bold text-gray-900">{title}</h2>
 

@@ -22,6 +22,18 @@ export function isSmtpConfigured() {
 
 /** Build a transporter when SMTP is configured, otherwise null. */
 let transporter = null;
+const SAFE_SMTP_ERROR_CODES = new Set([
+  "EAUTH",
+  "ECONNECTION",
+  "EDNS",
+  "EAI_AGAIN",
+  "ENOTFOUND",
+  "ESOCKET",
+  "ETIMEDOUT",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ETLS",
+]);
 
 function getTransporter() {
   if (transporter !== null) {
@@ -36,6 +48,12 @@ function getTransporter() {
     host: env.smtpHost,
     port: env.smtpPort || 587,
     secure: Boolean(env.smtpSecure),
+    // Bound DNS, connection, server greeting, and stalled SMTP sessions.
+    // These are independent of the HTTP request lifetime.
+    dnsTimeout: 5000,
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 10000,
     auth: {
       user: env.smtpUser,
       pass: env.smtpPass,
@@ -70,10 +88,15 @@ export async function sendMail({ to, subject, html }) {
     });
 
     return { ok: true, via: "smtp" };
-  } catch {
+  } catch (error) {
     // Do not log the SMTP error object: provider errors can contain private
     // connection details. Message content also contains the bearer reset link.
-    console.warn("[email] SMTP delivery failed; transactional email was not sent.");
+    const code = SAFE_SMTP_ERROR_CODES.has(error?.code)
+      ? error.code
+      : "SMTP_ERROR";
+    console.warn(
+      `[email] SMTP delivery failed (${code}); transactional email was not sent.`,
+    );
 
     return { ok: false, via: "smtp" };
   }

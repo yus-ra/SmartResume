@@ -3,6 +3,7 @@ import { useLocation, Link, useNavigate } from "react-router-dom";
 import { Sparkles } from "lucide-react";
 import Sidebar from "../../components/Navbar/Sidebar";
 import { explainMatch } from "../../lib/api";
+import { getExplanationFeedback } from "./explanationFeedback";
 
 const JobMatchResults = () => {
   const location = useLocation();
@@ -21,36 +22,48 @@ const JobMatchResults = () => {
     setError(null);
     setUnavailable(false);
 
-    const result = await explainMatch({
-      jobTitle: jobTitle || "",
-      company: company || "",
-      jobDescription: jobDescription || "",
-      matchScore: analysis.overallScore,
-      matchedSkills: analysis.matchedKeywords || [],
-      missingSkills: analysis.missingKeywords || [],
-    });
+    try {
+      const result = await explainMatch({
+        jobTitle: jobTitle || "",
+        company: company || "",
+        jobDescription: jobDescription || "",
+        matchScore: analysis.overallScore,
+        matchedSkills: analysis.matchedKeywords || [],
+        missingSkills: analysis.missingKeywords || [],
+      });
 
-    if (!result.ok) {
-      if (result.status === 503 && result.error === "ai_unavailable") {
-        setUnavailable(true);
-      } else {
-        setError(result.message || "Could not load AI explanation.");
+      if (!result.ok) {
+        const feedback = getExplanationFeedback(result);
+        if (feedback.unavailable) {
+          setUnavailable(true);
+        } else {
+          setError(feedback.message);
+        }
+        return;
       }
-      setLoading(false);
-      return;
-    }
 
-    setExplanation(result.data?.explanation || null);
-    setLoading(false);
+      const feedback = getExplanationFeedback(result);
+      if (feedback.message) {
+        setError(feedback.message);
+      } else {
+        setExplanation(feedback.explanation);
+      }
+    } catch {
+      setError(
+        "Could not load the AI explanation. Your match score and recommendations are still available. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
       <Sidebar />
 
-      <div className="ml-60 min-h-screen">
+      <div className="min-h-screen md:ml-60">
         <header className="bg-white border-b border-gray-100">
-          <div className="px-12 py-8 flex items-center justify-between">
+          <div className="px-4 sm:px-6 lg:px-12 py-6 sm:py-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <Link
                 to="/job-match"
@@ -64,7 +77,7 @@ const JobMatchResults = () => {
                   JOB MATCH ANALYSIS
                 </p>
 
-                <h1 className="text-3xl font-bold text-gray-900">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
                   Job Match Results
                 </h1>
                 {jobTitle && (
@@ -90,10 +103,10 @@ const JobMatchResults = () => {
           </div>
         </header>
 
-        <main className="px-12 py-10">
+        <main className="px-4 sm:px-6 lg:px-12 py-6 sm:py-10">
           <div className="max-w-[1400px] mx-auto">
             {!analysis ? (
-              <div className="bg-white border border-gray-100 rounded-3xl p-12 text-center">
+              <div className="bg-white border border-gray-100 rounded-3xl p-6 sm:p-12 text-center">
                 <div className="w-20 h-20 mx-auto rounded-3xl bg-blue-50 flex items-center justify-center text-4xl mb-6">
                   🎯
                 </div>
@@ -119,7 +132,7 @@ const JobMatchResults = () => {
             ) : (
               <div className="space-y-8">
                 {/* Score Summary */}
-                <div className="bg-white border border-gray-100 rounded-3xl p-8 flex items-center justify-between shadow-sm">
+                <div className="bg-white border border-gray-100 rounded-3xl p-5 sm:p-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm">
                   <div>
                     <p className="text-xs uppercase tracking-wider font-semibold text-gray-400 mb-1">
                       Overall Match Score
@@ -136,7 +149,7 @@ const JobMatchResults = () => {
                 {/* Details Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   {/* Matched Keywords */}
-                  <div className="bg-white border border-gray-100 rounded-3xl p-8 shadow-sm">
+                  <div className="min-w-0 bg-white border border-gray-100 rounded-3xl p-5 sm:p-8 shadow-sm">
                     <h3 className="text-lg font-bold text-gray-900 mb-4">
                       Matched Skills & Keywords
                     </h3>
@@ -159,7 +172,7 @@ const JobMatchResults = () => {
                   </div>
 
                   {/* Recommendations */}
-                  <div className="bg-white border border-gray-100 rounded-3xl p-8 shadow-sm">
+                  <div className="min-w-0 bg-white border border-gray-100 rounded-3xl p-5 sm:p-8 shadow-sm">
                     <h3 className="text-lg font-bold text-gray-900 mb-4">
                       Recommendations
                     </h3>
@@ -180,7 +193,7 @@ const JobMatchResults = () => {
                 </div>
 
                 {/* AI Explanation */}
-                <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+                <section className="min-w-0 bg-white rounded-3xl border border-gray-100 shadow-sm p-5 sm:p-8">
                   <div className="flex items-start gap-4 mb-6">
                     <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
                       <Sparkles size={24} className="text-white" />
@@ -272,16 +285,16 @@ const JobMatchResults = () => {
                   )}
                 </section>
 
-                <div className="flex justify-end gap-3 pt-4">
+                <div className="flex flex-col sm:flex-row sm:justify-end gap-3 pt-4">
                   <Link
                     to="/job-match"
-                    className="px-6 py-3 rounded-xl border border-gray-200 font-semibold text-gray-700 hover:bg-gray-50 text-sm"
+                    className="px-6 py-3 text-center rounded-xl border border-gray-200 font-semibold text-gray-700 hover:bg-gray-50 text-sm"
                   >
                     Analyze Another Job
                   </Link>
                   <Link
                     to="/editor"
-                    className="px-6 py-3 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-800 text-sm"
+                    className="px-6 py-3 text-center rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-800 text-sm"
                   >
                     Edit Resume
                   </Link>

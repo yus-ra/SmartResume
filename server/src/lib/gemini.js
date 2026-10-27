@@ -22,6 +22,16 @@ import { env } from "../config/env.js";
 
 /** The model used for explanations. Single source of truth. */
 const GEMINI_MODEL = "gemini-3.8-flash";
+export const GEMINI_TIMEOUT_MS = 12000;
+const SAFE_NETWORK_ERROR_CODES = new Set([
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ETIMEDOUT",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EHOSTUNREACH",
+  "ECONNABORTED",
+]);
 
 let client = null;
 
@@ -53,11 +63,11 @@ function getClient() {
  *
  * Returns:
  *   { ok: true, text: "..." }
- *   { ok: false, reason: "unconfigured" | "provider_error" | "invalid_response" }
+ *   { ok: false, reason: "unconfigured" | "provider_error" | "invalid_response" | "timeout" }
  *
  * Never throws. Never logs the API key or the prompt body in full.
  */
-export async function generateText(prompt) {
+export async function generateText(prompt, { timeoutMs = GEMINI_TIMEOUT_MS } = {}) {
   const resolvedClient = getClient();
 
   if (!resolvedClient) {
@@ -68,16 +78,21 @@ export async function generateText(prompt) {
 
   try {
     model = resolvedClient.getGenerativeModel({ model: GEMINI_MODEL });
-  } catch (error) {
+  } catch {
     // A bad model name or SDK misuse is a server configuration problem, not
     // something the client should ever see raw.
-    console.error("[gemini] Failed to build model:", error?.message || error);
+    console.error("[gemini] Failed to build model.");
 
     return { ok: false, reason: "provider_error" };
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
-    const result = await model.generateContent(prompt);
+    const result = await model.generateContent(prompt, {
+      signal: controller.signal,
+    });
     const text = extractText(result);
 
     if (!text) {
@@ -86,11 +101,25 @@ export async function generateText(prompt) {
 
     return { ok: true, text };
   } catch (error) {
-    // Network failure, quota, auth rejection, timeout, or any other provider
-    // error. Map to one safe reason and log only the short message.
-    console.error("[gemini] generateContent failed:", error?.message || error);
+    // Never log raw provider errors; SDK errors can contain the request URL
+    // (including its API key) or prompt data.
+    if (controller.signal.aborted || error?.name === "AbortError") {
+      console.error("[gemini] Generation timed out.");
+      return { ok: false, reason: "timeout" };
+    }
+
+    const code = SAFE_NETWORK_ERROR_CODES.has(error?.code)
+      ? error.code
+      : "provider_error";
+    const status =
+      Number.isInteger(error?.status) && error.status >= 100 && error.status <= 599
+        ? error.status
+        : "unknown";
+    console.error(`[gemini] Generation failed (code=${code}, status=${status}).`);
 
     return { ok: false, reason: "provider_error" };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

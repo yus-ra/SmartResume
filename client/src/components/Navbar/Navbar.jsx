@@ -89,7 +89,7 @@ const Navbar = () => {
         </div>
 
         <button
-          className="md:hidden flex flex-col gap-1.5 p-2"
+          className="md:hidden flex min-h-11 min-w-11 flex-col items-center justify-center gap-1.5 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] rounded-lg"
           onClick={() => setMenuOpen(!menuOpen)}
           aria-label="Toggle menu"
         >

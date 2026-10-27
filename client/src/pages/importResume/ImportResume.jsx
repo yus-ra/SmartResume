@@ -1549,7 +1549,7 @@ const ImportResume = () => {
 
   return (
     <div
-      className="flex min-h-screen bg-[#F8FAFC]"
+      className="flex min-h-screen flex-col bg-[#F8FAFC] md:flex-row"
       style={{
         fontFamily: "'Poppins', sans-serif",
       }}
@@ -1560,7 +1560,7 @@ const ImportResume = () => {
 
       {/* MAIN */}
 
-      <main className="flex-1 md:ml-60 flex items-center justify-center p-6">
+      <main className="flex-1 md:ml-60 flex items-center justify-center p-4 sm:p-6">
         <div className="w-full max-w-2xl">
           {/* BACK */}
 
@@ -1596,11 +1596,23 @@ const ImportResume = () => {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={openFileSelector}
+              role="button"
+              tabIndex={status === "idle" ? 0 : -1}
+              aria-disabled={status !== "idle"}
+              onKeyDown={(event) => {
+                if (
+                  status === "idle" &&
+                  (event.key === "Enter" || event.key === " ")
+                ) {
+                  event.preventDefault();
+                  openFileSelector();
+                }
+              }}
               className={`
                 border-2
                 border-dashed
                 rounded-2xl
-                p-10
+                p-5 sm:p-10
                 text-center
                 transition-all
                 ${status === "idle" ? "cursor-pointer" : "cursor-default"}

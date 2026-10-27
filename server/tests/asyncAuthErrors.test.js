@@ -93,6 +93,37 @@ test("async auth failures return a generic response and do not log details", asy
     assert.equal(logOutput.includes(internalFailure), false);
     assert.equal(logOutput.includes("async-error@example.test"), false);
     assert.equal(logOutput.includes("test-only-password"), false);
+
+    const forgotRoute = authRoutes.stack.find(
+      (layer) =>
+        layer.route?.path === "/forgot-password" && layer.route.methods.post,
+    );
+    const forgotHandler = forgotRoute.route.stack.at(-1).handle;
+    const forgotResponse = {
+      statusCode: null,
+      body: null,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(payload) {
+        this.body = payload;
+        return this;
+      },
+    };
+
+    await forgotHandler(
+      { body: { email: "forgot-error@example.test" } },
+      forgotResponse,
+      (error) => errorMiddleware(error, {}, forgotResponse, () => {}),
+    );
+
+    assert.equal(forgotResponse.statusCode, 500);
+    assert.deepEqual(forgotResponse.body, {
+      error: "internal_error",
+      message: "Something went wrong on the server.",
+    });
+    assert.equal(logs.join("\n").includes("forgot-error@example.test"), false);
   } finally {
     await disconnectDatabase();
     restoreConsole();

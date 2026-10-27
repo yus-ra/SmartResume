@@ -65,6 +65,8 @@ test("password reset emails never put bearer credentials in logs", async (t) => 
   };
   const logs = [];
   const mailMessages = [];
+  let transportOptions;
+  let databaseOptions;
   const users = [];
   let sequence = 0;
   let smtpMode = "success";
@@ -78,24 +80,37 @@ test("password reset emails never put bearer credentials in logs", async (t) => 
   env.smtpUser = "";
   env.smtpPass = "";
 
-  t.mock.method(mongoose, "connect", async () => mongoose);
+  t.mock.method(mongoose, "connect", async (_uri, options) => {
+    databaseOptions = options;
+    return mongoose;
+  });
   t.mock.method(mongoose, "disconnect", async () => mongoose);
   t.mock.method(crypto, "randomBytes", (size) => {
     sequence += 1;
     return Buffer.alloc(size, sequence);
   });
   t.mock.method(User, "findOne", (...args) => findOneImplementation(...args));
-  t.mock.method(nodemailer, "createTransport", () => ({
-    sendMail: async (message) => {
-      mailMessages.push(message);
+  // Capture only non-secret timeout settings; never inspect SMTP credentials.
+  t.mock.method(nodemailer, "createTransport", (options) => {
+    transportOptions = options;
+    return {
+      sendMail: async (message) => {
+        mailMessages.push(message);
 
-      if (smtpMode === "failure") {
-        throw new Error("test SMTP failure details");
-      }
+        if (smtpMode === "failure") {
+          const error = new Error("test SMTP failure details");
+          error.code = "ESOCKET";
+          throw error;
+        }
 
-      return { messageId: "test-message" };
-    },
-  }));
+        if (smtpMode === "timeout") {
+          return new Promise(() => {});
+        }
+
+        return { messageId: "test-message" };
+      },
+    };
+  });
 
   findOneImplementation = async ({ email }) => {
     const user = {
@@ -114,6 +129,7 @@ test("password reset emails never put bearer credentials in logs", async (t) => 
     const startedAt = Date.now();
     const response = await callForgotPassword();
     const finishedAt = Date.now();
+    await new Promise((resolve) => setImmediate(resolve));
     const rawToken = tokenFor(expectedSequence);
     const resetUrl = `${env.clientOrigin}/reset-password?token=${rawToken}`;
     const requestLogs = logs.slice(logStart).join("\n");
@@ -146,6 +162,9 @@ test("password reset emails never put bearer credentials in logs", async (t) => 
 
   try {
     await connectDatabase();
+    assert.equal(databaseOptions.serverSelectionTimeoutMS, 5000);
+    assert.equal(databaseOptions.connectTimeoutMS, 5000);
+    assert.equal(databaseOptions.socketTimeoutMS, 5000);
     logs.length = 0;
 
     await t.test("SMTP unavailable keeps the generic response and logs no link", async () => {
@@ -165,6 +184,11 @@ test("password reset emails never put bearer credentials in logs", async (t) => 
 
       const { requestLogs, rawToken, resetUrl } = await runForgotRequest(2);
       const message = mailMessages.at(-1);
+
+      assert.equal(transportOptions.dnsTimeout, 5000);
+      assert.equal(transportOptions.connectionTimeout, 5000);
+      assert.equal(transportOptions.greetingTimeout, 5000);
+      assert.equal(transportOptions.socketTimeout, 10000);
 
       assert.equal(message.to, "person@example.test");
       assert.equal(message.html.includes(resetUrl), true);
@@ -188,6 +212,31 @@ test("password reset emails never put bearer credentials in logs", async (t) => 
         true,
         "only a generic operational warning should be recorded",
       );
+      assert.equal(requestLogs.includes("ESOCKET"), true);
+    });
+
+    await t.test("an SMTP timeout does not hold the generic HTTP response", async () => {
+      smtpMode = "timeout";
+      const response = await Promise.race([
+        callForgotPassword(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("forgot-password waited for SMTP")), 100),
+        ),
+      ]);
+
+      assert.equal(response.statusCode, 200);
+      assert.deepEqual(response.body, GENERIC_FORGOT_RESPONSE);
+    });
+
+    await t.test("unknown accounts receive the same generic response", async () => {
+      const emailCallsBefore = mailMessages.length;
+      findOneImplementation = async () => null;
+
+      const response = await callForgotPassword();
+
+      assert.equal(response.statusCode, 200);
+      assert.deepEqual(response.body, GENERIC_FORGOT_RESPONSE);
+      assert.equal(mailMessages.length, emailCallsBefore);
     });
 
     await t.test("reset still hashes the password and consumes the token", async () => {

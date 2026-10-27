@@ -49,6 +49,8 @@ export async function connectDatabase() {
       // Fail fast instead of hanging for 30s on an unreachable host.
       serverSelectionTimeoutMS: 5000,
       connectTimeoutMS: 5000,
+      // Bound operations on an established but unresponsive Mongo socket.
+      socketTimeoutMS: 5000,
     });
 
     connectionState = "connected";

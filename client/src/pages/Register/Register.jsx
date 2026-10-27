@@ -158,7 +158,7 @@ const Register = () => {
       </div>
 
       {/* Right form panel */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12 bg-[#F8FAFC]">
+      <div className="flex-1 flex items-center justify-center px-4 sm:px-6 py-8 sm:py-12 bg-[#F8FAFC]">
         <div className="w-full max-w-md">
           <Link
             to="/"
@@ -175,7 +175,7 @@ const Register = () => {
             </span>
           </Link>
 
-          <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm p-8">
+          <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm p-5 sm:p-8">
             <h1 className="font-extrabold text-[#0F172A] text-2xl mb-1">
               Create Account 🚀
             </h1>
@@ -190,7 +190,7 @@ const Register = () => {
             )}
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-[#0F172A] mb-1.5 uppercase tracking-wide">
                     First Name

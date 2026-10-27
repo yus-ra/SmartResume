@@ -248,7 +248,10 @@ export async function forgotPassword(req, res) {
 
     const resetLink = `${env.clientOrigin}/reset-password?token=${rawToken}`;
 
-    await sendMail({
+    // SMTP delivery is intentionally detached from the HTTP response. The
+    // mail helper always resolves and logs only a generic outcome, so slow or
+    // unreachable SMTP providers cannot exceed the browser request deadline.
+    void sendMail({
       to: user.email,
       subject: "Reset your SmartResume password",
       html: `

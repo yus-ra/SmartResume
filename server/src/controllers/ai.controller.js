@@ -138,6 +138,14 @@ export async function explainMatch(req, res) {
       });
     }
 
+    if (result.reason === "timeout") {
+      return res.status(504).json({
+        error: "ai_timeout",
+        message:
+          "The AI explanation took too long. Your match score and recommendations are still available. Please try again.",
+      });
+    }
+
     // provider_error and invalid_response are both transient or server-side
     // problems. Report them generically; never leak provider details.
     return res.status(502).json({
