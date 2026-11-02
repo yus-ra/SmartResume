@@ -357,7 +357,7 @@ export function explainMatch(payload) {
   return request("/api/ai/explain-match", {
     method: "POST",
     body: payload,
-    // The server aborts Gemini at 12 seconds and returns a safe 504.
+    // The server aborts OpenRouter at 12 seconds and returns a safe 504.
     timeoutMs: 15000,
   });
 }

@@ -265,7 +265,8 @@ export async function forgotPassword(req, res) {
   }
 
   return res.status(200).json({
-    message: "If an account with that email exists, a reset link has been sent.",
+    message:
+      "If an account with that email exists, we'll attempt to send password-reset instructions. Check your inbox and spam folder shortly.",
   });
 }
 

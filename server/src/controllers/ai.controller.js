@@ -1,22 +1,21 @@
 /**
  * server/src/controllers/ai.controller.js
  *
- * AI controller — advisory Job Match explanation.
+ * AI controller — advisory Job Match explanation through OpenRouter.
  *
  * The deterministic Job Match score computed on the client is the source of
- * truth. This endpoint only asks Gemini to explain that result in plain
+ * truth. This endpoint only asks OpenRouter to explain that result in plain
  * language. It never calculates a score, never replaces the deterministic
  * result, and never invents candidate experience or skills.
  *
  * Data-minimisation: the request carries only the aggregated match data the
  * client already computed (job title, company, job description, score, matched
  * and missing skills). The user's full resume is NOT loaded from MongoDB and
- * is NOT sent to Gemini — name, email, phone, location, education and
+ * is NOT sent to OpenRouter — name, email, phone, location, education and
  * experience bullets stay server-side and out of the prompt entirely.
  */
 
-import { env } from "../config/env.js";
-import { generateText } from "../lib/gemini.js";
+import { generateText, isConfigured } from "../lib/openrouter.js";
 import { ensureDatabase } from "../middleware/requireDatabase.js";
 import { validateExplainMatch } from "../lib/validation.js";
 
@@ -117,7 +116,7 @@ export async function explainMatch(req, res) {
 
   // 2. The AI service is optional. If no key is configured, answer 503 so the
   //    client can hide the feature. The app keeps working without it.
-  if (!env.geminiApiKey) {
+  if (!isConfigured()) {
     return res.status(503).json({
       error: "ai_unavailable",
       message: "AI explanation is not configured.",

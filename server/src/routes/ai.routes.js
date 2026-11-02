@@ -13,7 +13,7 @@ const router = Router();
  * `ensureDatabase`, matching the pattern used by /auth/forgot-password and
  * /auth/reset-password.
  *
- * The AI service itself is optional: when GEMINI_API_KEY is absent the
+ * The AI service itself is optional: when OpenRouter is not configured the
  * controller answers 503 and the app keeps working.
  */
 router.post("/explain-match", requireAuth, explainMatch);

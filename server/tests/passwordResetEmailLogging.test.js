@@ -15,7 +15,8 @@ import {
 import { User } from "../src/models/User.js";
 
 const GENERIC_FORGOT_RESPONSE = {
-  message: "If an account with that email exists, a reset link has been sent.",
+  message:
+    "If an account with that email exists, we'll attempt to send password-reset instructions. Check your inbox and spam folder shortly.",
 };
 
 const tokenFor = (sequence) => Buffer.alloc(32, sequence).toString("hex");
@@ -137,6 +138,8 @@ test("password reset emails never put bearer credentials in logs", async (t) => 
 
     assert.equal(response.statusCode, 200);
     assert.deepEqual(response.body, GENERIC_FORGOT_RESPONSE);
+    assert.equal(JSON.stringify(response.body).includes(rawToken), false);
+    assert.equal(JSON.stringify(response.body).includes(resetUrl), false);
     assert.equal(
       Boolean(
         user.resetPasswordToken === hashToken(rawToken) &&

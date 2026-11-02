@@ -82,7 +82,7 @@ const Login = () => {
 
     // Success message
     setResetMessage(
-      "If an account with that email exists, a reset link has been sent. Check your email.",
+      "If an account with that email exists, we'll attempt to send password-reset instructions. Check your inbox and spam folder shortly.",
     );
   };
 
