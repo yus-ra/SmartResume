@@ -11,7 +11,7 @@
 import { env } from "../config/env.js";
 
 const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-export const OPENROUTER_TIMEOUT_MS = 12000;
+export const OPENROUTER_TIMEOUT_MS = 30000;
 const SAFE_NETWORK_ERROR_CODES = new Set([
   "ENOTFOUND",
   "EAI_AGAIN",
@@ -24,6 +24,24 @@ const SAFE_NETWORK_ERROR_CODES = new Set([
 
 export function isConfigured() {
   return Boolean(env.openRouterApiKey && env.openRouterModel);
+}
+
+function logDiagnostic(event, startedAt, details = {}) {
+  const model = env.openRouterModel
+    .replace(/[^a-zA-Z0-9._:/-]/g, "")
+    .slice(0, 120) || "unknown";
+  const fields = [
+    `model=${model}`,
+    `elapsed_ms=${Math.max(0, Date.now() - startedAt)}`,
+  ];
+
+  for (const [name, value] of Object.entries(details)) {
+    if (value !== undefined && value !== null) {
+      fields.push(`${name}=${value}`);
+    }
+  }
+
+  console.error(`[openrouter] ${event} (${fields.join(", ")}).`);
 }
 
 /**
@@ -40,6 +58,7 @@ export async function generateText(
     return { ok: false, reason: "unconfigured" };
   }
 
+  const startedAt = Date.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -66,7 +85,7 @@ export async function generateText(
         response.status <= 599
           ? response.status
           : "unknown";
-      console.error(`[openrouter] Request failed (status=${status}).`);
+      logDiagnostic("Request failed", startedAt, { status });
       return { ok: false, reason: "provider_error" };
     }
 
@@ -78,20 +97,23 @@ export async function generateText(
         throw error;
       }
 
-      console.error("[openrouter] Response was not valid JSON.");
+      logDiagnostic("Response was not valid JSON", startedAt);
       return { ok: false, reason: "invalid_response" };
     }
 
     const text = result?.choices?.[0]?.message?.content;
     if (typeof text !== "string" || !text.trim()) {
-      console.error("[openrouter] Response did not contain explanation text.");
+      logDiagnostic("Response did not contain explanation text", startedAt);
       return { ok: false, reason: "invalid_response" };
     }
 
+    logDiagnostic("Request completed", startedAt, { status: response.status });
     return { ok: true, text: text.trim() };
   } catch (error) {
-    if (controller.signal.aborted || error?.name === "AbortError") {
-      console.error("[openrouter] Request timed out.");
+    if (controller.signal.aborted) {
+      logDiagnostic("Request timed out", startedAt, {
+        error_type: "AbortError",
+      });
       return { ok: false, reason: "timeout" };
     }
 
@@ -100,7 +122,18 @@ export async function generateText(
       : SAFE_NETWORK_ERROR_CODES.has(error?.code)
         ? error.code
         : "NETWORK_ERROR";
-    console.error(`[openrouter] Request failed (code=${code}).`);
+    const errorType = new Set([
+      "AbortError",
+      "Error",
+      "TimeoutError",
+      "TypeError",
+    ]).has(error?.name)
+      ? error.name
+      : "UnknownError";
+    logDiagnostic("Request failed", startedAt, {
+      code,
+      error_type: errorType,
+    });
     return { ok: false, reason: "provider_error" };
   } finally {
     clearTimeout(timeout);

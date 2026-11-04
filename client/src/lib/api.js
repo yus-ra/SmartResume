@@ -19,6 +19,7 @@ const API_BASE_URL =
 
 /* A request that never returns should not hang a form forever. */
 const REQUEST_TIMEOUT_MS = 10000;
+export const AI_EXPLANATION_TIMEOUT_MS = 35000;
 
 const success = (status, data) => ({ ok: true, status, data });
 
@@ -357,7 +358,7 @@ export function explainMatch(payload) {
   return request("/api/ai/explain-match", {
     method: "POST",
     body: payload,
-    // The server aborts OpenRouter at 12 seconds and returns a safe 504.
-    timeoutMs: 15000,
+    // Allow the backend's 30-second provider deadline plus network overhead.
+    timeoutMs: AI_EXPLANATION_TIMEOUT_MS,
   });
 }

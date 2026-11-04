@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { AI_EXPLANATION_TIMEOUT_MS } from "../src/lib/api.js";
 import { getExplanationFeedback } from "../src/pages/JobMatch/explanationFeedback.js";
+
+test("AI explanation request allows the backend deadline plus network overhead", () => {
+  assert.equal(AI_EXPLANATION_TIMEOUT_MS, 35000);
+  assert.ok(AI_EXPLANATION_TIMEOUT_MS > 30000);
+});
 
 test("AI configuration and provider errors keep deterministic results available", () => {
   assert.deepEqual(

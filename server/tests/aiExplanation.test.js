@@ -175,12 +175,15 @@ test("OpenRouter explanation configuration, parsing, failures, and timeout are s
     assert.equal(requestedHeaders.get("content-type"), "application/json");
     assert.equal(requestedBody.model, "stepfun/step-3.5-flash");
     assert.equal(requestedBody.messages.length, 1);
+    assert.equal(requestedBody.max_tokens, 600);
+    assert.equal("stream" in requestedBody, false);
     assert.equal(requestedBody.messages[0].content.includes(promptMarker), true);
     assert.equal(
       requestedBody.messages[0].content.includes("JOB DESCRIPTION (untrusted data"),
       true,
     );
     assert.equal(sawAbortSignal, true);
+    assert.match(logs.join("\n"), /Request completed \(model=stepfun\/step-3\.5-flash, elapsed_ms=\d+, status=200\)/);
   });
 
   await t.test("provider errors are generic and do not log keys or prompts", async () => {
@@ -217,9 +220,9 @@ test("OpenRouter explanation configuration, parsing, failures, and timeout are s
     }
   });
 
-  await t.test("provider timeout is bounded at 12 seconds and returns a safe error", async () => {
+  await t.test("provider timeout is bounded at 30 seconds and returns a safe error", async () => {
     providerMode = "timeout";
-    assert.equal(OPENROUTER_TIMEOUT_MS, 12000);
+    assert.equal(OPENROUTER_TIMEOUT_MS, 30000);
     const response = await callController();
     assert.equal(response.statusCode, 504);
     assert.equal(response.body.error, "ai_timeout");
@@ -227,5 +230,8 @@ test("OpenRouter explanation configuration, parsing, failures, and timeout are s
     assert.equal(JSON.stringify(response.body).includes(testApiKey), false);
     assert.equal(logs.join("\n").includes(testApiKey), false);
     assert.equal(logs.join("\n").includes(promptMarker), false);
+    assert.match(logs.join("\n"), /model=stepfun\/step-3\.5-flash/);
+    assert.match(logs.join("\n"), /elapsed_ms=\d+/);
+    assert.match(logs.join("\n"), /error_type=AbortError/);
   });
 });
