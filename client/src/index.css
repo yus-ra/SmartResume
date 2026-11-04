@@ -59,3 +59,9 @@ a {
 button {
     cursor: pointer;
 }
+
+@media (max-width: 767px) {
+    body.workspace-mobile-nav-active main {
+        padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+    }
+}

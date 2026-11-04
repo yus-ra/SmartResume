@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { loadResume, isEmptyResume } from "../../lib/resumeSchema";
+import Sidebar from "../../components/Navbar/Sidebar";
 
 /* =========================================================
    SCORE GAUGE
@@ -1028,6 +1029,7 @@ export default function ResumeAnalysis() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Sidebar desktopNav={false} />
       {/* Header */}
 
       <header className="bg-white border-b border-gray-100">
